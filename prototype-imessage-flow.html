@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iMessage Agent Flow Prototype</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+        }
+        .prototype-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #1c1c1e;
+            padding: 15px 20px;
+            border-bottom: 1px solid #333;
+            z-index: 100;
+        }
+        .prototype-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .prototype-header p {
+            font-size: 14px;
+            color: #999;
+        }
+        .variant-switcher {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(28, 28, 30, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #444;
+            border-radius: 20px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            z-index: 100;
+        }
+        .variant-switcher button {
+            background: none;
+            border: none;
+            color: #0a84ff;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .variant-switcher button:hover {
+            background: rgba(10, 132, 255, 0.1);
+        }
+        .variant-switcher .label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            min-width: 280px;
+            text-align: center;
+        }
+        .chat-container {
+            max-width: 600px;
+            margin: 100px auto 80px;
+            background: #1c1c1e;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+        .chat-header {
+            background: #2c2c2e;
+            padding: 15px 20px;
+            border-bottom: 1px solid #333;
+        }
+        .chat-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .chat-header .subtitle {
+            font-size: 13px;
+            color: #999;
+            margin-top: 2px;
+        }
+        .messages {
+            padding: 20px;
+            min-height: 400px;
+        }
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message.sent {
+            align-items: flex-end;
+        }
+        .message.received {
+            align-items: flex-start;
+        }
+        .message-bubble {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 18px;
+            position: relative;
+        }
+        .message.sent .message-bubble {
+            background: #0a84ff;
+            color: #fff;
+        }
+        .message.received .message-bubble {
+            background: #3a3a3c;
+            color: #fff;
+        }
+        .message-sender {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+            padding: 0 14px;
+        }
+        .message.sent .message-sender {
+            display: none;
+        }
+        .reaction {
+            position: absolute;
+            bottom: -8px;
+            right: -8px;
+            background: #2c2c2e;
+            border: 2px solid #1c1c1e;
+            border-radius: 12px;
+            padding: 2px 6px;
+            font-size: 14px;
+        }
+        .app-card {
+            background: #2c2c2e;
+            border: 1px solid #444;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 8px;
+            max-width: 90%;
+        }
+        .app-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .draft-item {
+            background: #3a3a3c;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .draft-item:last-child {
+            margin-bottom: 0;
+        }
+        .draft-label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .draft-value {
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+        .draft-split {
+            font-size: 13px;
+            color: #0a84ff;
+        }
+        .app-card-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .app-button {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .app-button:hover {
+            opacity: 0.8;
+        }
+        .app-button.primary {
+            background: #0a84ff;
+            color: #fff;
+        }
+        .app-button.secondary {
+            background: #3a3a3c;
+            color: #fff;
+        }
+        .variant {
+            display: none;
+        }
+        .variant.active {
+            display: block;
+        }
+        .timestamp {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            margin: 20px 0 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="prototype-header">
+        <h1>🏗️ Throwaway Prototype: iMessage Agent Flow</h1>
+        <p>Question: What does the in-chat experience look like?</p>
+    </div>
+
+    <div class="variant-switcher">
+        <button onclick="previousVariant()">←</button>
+        <div class="label" id="variant-label"></div>
+        <button onclick="nextVariant()">→</button>
+    </div>
+
+    <!-- VARIANT A: Per-message reaction flow -->
+    <div class="variant" id="variant-a">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>MHacks Weekend</h2>
+                <div class="subtitle">Alex, Jordan, Sam</div>
+            </div>
+            <div class="messages">
+                <div class="timestamp">Saturday 6:45 PM</div>
+                
+                <div class="message received">
+                    <div class="message-sender">Alex</div>
+                    <div class="message-bubble">
+                        @agent start listening
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Agent</div>
+                    <div class="message-bubble">
+                        👍 Listening started. I'll record expenses as we talk.
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Jordan</div>
+                    <div class="message-bubble">
+                        I just paid $45 for pizza, split it three ways
+                        <span class="reaction">👍</span>
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Sam</div>
+                    <div class="message-bubble">
+                        Got drinks for $28, everyone split equally
+                        <span class="reaction">👍</span>
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Alex</div>
+                    <div class="message-bubble">
+                        Paid $60 for the Uber back, Jordan and Sam owe me
+                        <span class="reaction">👍</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VARIANT B: Summary and modification flow -->
+    <div class="variant" id="variant-b">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>MHacks Weekend</h2>
+                <div class="subtitle">Alex, Jordan, Sam</div>
+            </div>
+            <div class="messages">
+                <div class="timestamp">Saturday 6:48 PM</div>
+                
+                <div class="message received">
+                    <div class="message-sender">Jordan</div>
+                    <div class="message-bubble">
+                        What do you got @agent?
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Agent</div>
+                    <div class="message-bubble">
+                        Here's what I've recorded so far:
+                    </div>
+                    <div class="app-card">
+                        <div class="app-card-title">📝 3 Drafts</div>
+                        
+                        <div class="draft-item">
+                            <div class="draft-label">Pizza</div>
+                            <div class="draft-value">$45.00 paid by Jordan</div>
+                            <div class="draft-split">Split equally: $15.00 each</div>
+                        </div>
+
+                        <div class="draft-item">
+                            <div class="draft-label">Drinks</div>
+                            <div class="draft-value">$28.00 paid by Sam</div>
+                            <div class="draft-split">Split equally: $9.33 each</div>
+                        </div>
+
+                        <div class="draft-item">
+                            <div class="draft-label">Uber back</div>
+                            <div class="draft-value">$60.00 paid by Alex</div>
+                            <div class="draft-split">Jordan: $30.00, Sam: $30.00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Alex</div>
+                    <div class="message-bubble">
+                        Actually I was on that drinks order too, make it $14 each
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Agent</div>
+                    <div class="message-bubble">
+                        👍 Updated drinks to $14.00 each (2 people)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VARIANT C: Confirmation and commit flow -->
+    <div class="variant" id="variant-c">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>MHacks Weekend</h2>
+                <div class="subtitle">Alex, Jordan, Sam</div>
+            </div>
+            <div class="messages">
+                <div class="timestamp">Saturday 6:52 PM</div>
+                
+                <div class="message received">
+                    <div class="message-sender">Jordan</div>
+                    <div class="message-bubble">
+                        @agent stop listening
+                    </div>
+                </div>
+
+                <div class="message received">
+                    <div class="message-sender">Agent</div>
+                    <div class="message-bubble">
+                        Ready to commit these expenses to Splitwise?
+                    </div>
+                    <div class="app-card">
+                        <div class="app-card-title">💸 Final Review</div>
+                        
+                        <div class="draft-item">
+                            <div class="draft-label">Pizza</div>
+                            <div class="draft-value">$45.00 paid by Jordan</div>
+                            <div class="draft-split">Split equally: $15.00 each</div>
+                        </div>
+
+                        <div class="draft-item">
+                            <div class="draft-label">Drinks</div>
+                            <div class="draft-value">$28.00 paid by Sam</div>
+                            <div class="draft-split">Jordan: $14.00, Alex: $14.00</div>
+                        </div>
+
+                        <div class="draft-item">
+                            <div class="draft-label">Uber back</div>
+                            <div class="draft-value">$60.00 paid by Alex</div>
+                            <div class="draft-split">Jordan: $30.00, Sam: $30.00</div>
+                        </div>
+
+                        <div class="app-card-buttons">
+                            <button class="app-button secondary">Cancel</button>
+                            <button class="app-button primary">Commit to Splitwise</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="timestamp">Jordan tapped "Commit to Splitwise"</div>
+
+                <div class="message received">
+                    <div class="message-sender">Agent</div>
+                    <div class="message-bubble">
+                        ✅ Done! Added 3 expenses to MHacks Weekend group in Splitwise.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const variants = [
+            { id: 'variant-a', name: 'A (Per-message reactions)' },
+            { id: 'variant-b', name: 'B (Summary & modifications)' },
+            { id: 'variant-c', name: 'C (Confirmation & commit)' }
+        ];
+        let currentIndex = 0;
+
+        function updateVariant() {
+            document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+            document.getElementById(variants[currentIndex].id).classList.add('active');
+            document.getElementById('variant-label').textContent = variants[currentIndex].name;
+        }
+
+        function nextVariant() {
+            currentIndex = (currentIndex + 1) % variants.length;
+            updateVariant();
+        }
+
+        function previousVariant() {
+            currentIndex = (currentIndex - 1 + variants.length) % variants.length;
+            updateVariant();
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            const activeElement = document.activeElement;
+            const isInputFocused = activeElement.tagName === 'INPUT' || 
+                                   activeElement.tagName === 'TEXTAREA' || 
+                                   activeElement.contentEditable === 'true';
+            
+            if (!isInputFocused) {
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    nextVariant();
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    previousVariant();
+                }
+            }
+        });
+
+        // Initialize
+        updateVariant();
+    </script>
+</body>
+</html>
