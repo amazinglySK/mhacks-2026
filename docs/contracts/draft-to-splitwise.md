@@ -48,9 +48,12 @@ interface Draft {
 }
 ```
 
-### Storage Key Pattern
+### Storage Layout
 
-`session_{group_chat_id}_draft_{draft_id}`
+The judging deployment has one configured DM, so Agent Storage holds two keys:
+
+- `listening_session`: `{status: 'active' | 'stopped', transcript, drafts: Draft[]}`. One value, saved whole after every change. The transcript is temporary context for the active session and is cleared on stop.
+- `committed_drafts`: `Draft[]` of committed Drafts with their `splitwise_expense_id`. A reset never deletes this key.
 
 ---
 
