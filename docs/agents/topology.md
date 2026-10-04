@@ -48,7 +48,7 @@ Reasoning Agent (Python uAgent, hosted on Agentverse)
 Splitwise REST API
 ```
 
-Photon submits DM events to `https://agentverse.ai/v1/submit` and polls the Agentverse mailbox for replies. This needs no gateway and no public endpoint on the presenter laptop.
+Photon is itself a signed Agentverse mailbox agent. It submits DM events as Agent Chat Protocol envelopes to the Reasoning Agent's endpoint, resolved on the Almanac, and polls its own Agentverse mailbox for replies. This needs no gateway and no public endpoint on the presenter laptop.
 
 ## Recording and Commit flow
 

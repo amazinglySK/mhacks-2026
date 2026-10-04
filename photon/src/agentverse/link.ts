@@ -22,7 +22,7 @@ interface ChatMessagePayload {
 export interface ReasoningAgentLinkOptions {
   identity: AgentIdentity;
   reasoningAgentAddress: string;
-  agentverseUrl: string;
+  agentverseUrl?: string;
   fetch?: typeof fetch;
 }
 
@@ -41,7 +41,7 @@ export class ReasoningAgentLink {
   constructor(options: ReasoningAgentLinkOptions) {
     this.identity = options.identity;
     this.target = options.reasoningAgentAddress;
-    this.baseUrl = options.agentverseUrl.replace(/\/$/, "");
+    this.baseUrl = options.agentverseUrl ?? "https://agentverse.ai";
     this.fetch = options.fetch ?? fetch;
   }
 
@@ -76,31 +76,37 @@ export class ReasoningAgentLink {
     });
   }
 
-  /** One mailbox poll. Returns reply texts from the Reasoning Agent; everything else is discarded. */
-  async receive(): Promise<string[]> {
+  /**
+   * One mailbox poll. Hands each Reasoning Agent reply to `deliver`; anything else is discarded.
+   * A reply stays in the mailbox until `deliver` resolves, so a failed delivery is retried next poll.
+   */
+  async receive(deliver: (text: string) => Promise<void>): Promise<void> {
     const response = await this.mailboxRequest("GET", "");
     if (!response.ok) throw new Error(`Photon mailbox poll failed (HTTP ${response.status})`);
     const items = (await response.json()) as StoredEnvelope[];
 
-    const replies: string[] = [];
     for (const { uuid, envelope } of items) {
+      const chat = this.trustedChatMessage(envelope);
+      if (chat) {
+        const text = chat.content
+          .filter((part) => part.type === "text" && part.text)
+          .map((part) => part.text)
+          .join("");
+        if (text) await deliver(text);
+        await this.submit(CHAT_ACK_SCHEMA_DIGEST, {
+          timestamp: new Date().toISOString(),
+          acknowledged_msg_id: chat.msg_id,
+          metadata: null,
+        });
+      }
       await this.mailboxRequest("DELETE", `/${uuid}`);
-      if (envelope.sender !== this.target || !verifyEnvelope(envelope)) continue;
-      if (envelope.schema_digest !== CHAT_MESSAGE_SCHEMA_DIGEST) continue;
-
-      const chat = decodePayload(envelope) as ChatMessagePayload;
-      await this.submit(CHAT_ACK_SCHEMA_DIGEST, {
-        timestamp: new Date().toISOString(),
-        acknowledged_msg_id: chat.msg_id,
-        metadata: null,
-      });
-      const text = chat.content
-        .filter((part) => part.type === "text" && part.text)
-        .map((part) => part.text)
-        .join("");
-      if (text) replies.push(text);
     }
-    return replies;
+  }
+
+  private trustedChatMessage(envelope: Envelope): ChatMessagePayload | undefined {
+    if (envelope.sender !== this.target || !verifyEnvelope(envelope)) return undefined;
+    if (envelope.schema_digest !== CHAT_MESSAGE_SCHEMA_DIGEST) return undefined;
+    return decodePayload(envelope) as ChatMessagePayload;
   }
 
   private async submit(schemaDigest: string, message: unknown): Promise<void> {

@@ -15,9 +15,9 @@ Run each from `photon/`. A preflight passes only when it prints `PASSED`.
 
 | Preflight | Command | Proves |
 |---|---|---|
-| Photon send/receive | `bun run preflight:photon` | The cloud line can send to the demo DM and receive a reply from it. |
-| Agentverse mailbox round trip | `bun run preflight:agentverse` | Photon's signed envelope reaches the hosted Reasoning Agent and its reply returns to Photon's mailbox. |
-| Splitwise group read | (same run as above) | The reply names the mapped **MHacks Weekend** group, so the Reasoning Agent read it with its Agentverse secrets and the demo user is a member; the wording comes from ASI:One. |
+| Photon send/receive | `bun run preflight:photon` | The cloud line can send to the demo DM and receive a reply sent after the preflight message. |
+| Agentverse mailbox round trip | `bun run preflight:agentverse` | Photon's signed envelope reaches the hosted Reasoning Agent and a reply returns to Photon's mailbox. |
+| Splitwise group read | (same run as above) | The reply is `PREFLIGHT OK group="MHacks Weekend" …`, which the Reasoning Agent sends only after reading the group with its Agentverse secrets, finding the demo user among its members, and getting an ASI:One completion. |
 
 Then run `bun run start`, send `@agent hello` from the demo DM, and expect a visible reply naming the group. A message from any other DM logs `message_rejected` with reason `other_space` and is never forwarded.
 

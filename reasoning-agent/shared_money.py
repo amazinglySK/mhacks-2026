@@ -11,6 +11,7 @@ import requests
 SPLITWISE_API = "https://secure.splitwise.com/api/v3.0"
 ASI1_MODEL = "asi1"
 MENTION = "@agent"
+PREFLIGHT_COMMAND = "@agent preflight"
 HTTP_TIMEOUT_SECONDS = 20
 
 REQUIRED_SECRETS = (
@@ -157,12 +158,16 @@ def respond_to_chat(
         return f"The demo user is not a member of the Splitwise group \"{group.get('name')}\", so I can't record Expenses there."
 
     try:
-        return asi.complete(_walking_prompt(group, text))
+        reply = asi.complete(_connection_prompt(group, text))
     except (Asi1Error, requests.RequestException):
         return f"I can see the Splitwise group \"{group.get('name')}\", but ASI:One didn't answer. Try again in a moment."
 
+    if text.strip().lower() == PREFLIGHT_COMMAND:
+        return f'PREFLIGHT OK group="{group.get("name")}" demo_user_member=yes asi1=yes'
+    return reply
 
-def _walking_prompt(group: dict, text: str) -> list[dict]:
+
+def _connection_prompt(group: dict, text: str) -> list[dict]:
     names = ", ".join(_full_name(m) for m in group.get("members") or [])
     system = (
         "You are the Shared-Money Agent, replying inside an iMessage DM. You will soon help record shared "

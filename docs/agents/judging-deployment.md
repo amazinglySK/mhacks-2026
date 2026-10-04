@@ -76,7 +76,7 @@ The hosted agent's code is `reasoning-agent/agent.py` plus `reasoning-agent/shar
 ## Startup behavior
 
 1. Photon validates all required environment variables.
-2. Photon connects its explicit cloud client and verifies the configured DM is reachable.
+2. Photon resolves the Reasoning Agent and its own mailbox on Agentverse, connects its Photon cloud credentials, and verifies the configured DM is reachable.
 3. Photon submits an authenticated `reset_demo_session` control envelope to the Reasoning Agent.
 4. The Reasoning Agent deletes the active Listening Session and all uncommitted Drafts for the configured DM, but preserves committed Expense mappings used by Corrections.
 5. Photon begins listening to the DM and polling the Agentverse mailbox.

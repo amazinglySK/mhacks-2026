@@ -41,6 +41,10 @@ describe("reduceInbound", () => {
     });
   });
 
+  test("rejects messages without a sender, which the Draft audit reference needs", () => {
+    expect(reduceInbound(message({ sender: undefined }), DEMO_DM)).toEqual({ ok: false, reason: "no_sender" });
+  });
+
   test("rejects other platforms", () => {
     expect(reduceInbound(message({ platform: "terminal" }), DEMO_DM)).toEqual({ ok: false, reason: "other_platform" });
   });

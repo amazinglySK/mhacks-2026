@@ -8,6 +8,7 @@ const TIMEOUT_MS = 120_000;
 const config = loadConfig();
 const app = await connectPhoton(config);
 const dm = await openDemoDm(app, config);
+const sentAt = new Date();
 await dm.send("Photon preflight: reply to this message with anything.");
 console.log("SEND ok. Waiting for a reply in the demo DM...");
 
@@ -17,9 +18,9 @@ const timer = setTimeout(() => {
 }, TIMEOUT_MS);
 
 for await (const [, message] of app.messages) {
-  if (!reduceInbound(message, config.demoDmId).ok) continue;
+  if (!reduceInbound(message, config.demoDmId).ok || message.timestamp < sentAt) continue;
   clearTimeout(timer);
-  console.log("RECEIVE ok. Photon preflight PASSED.");
+  console.log("RECEIVE ok. Photon send/receive PASSED.");
   await app.stop();
   process.exit(0);
 }

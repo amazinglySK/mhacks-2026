@@ -1,10 +1,11 @@
-import { ConfigError, loadConfig } from "./config";
+import { ConfigError, loadConfig, sensitiveValues } from "./config";
 import { reduceInbound } from "./dm";
-import { log, logError } from "./log";
+import { log, logError, redact } from "./log";
 import { connectPhoton, connectReasoningAgent, openDemoDm, pollReplies } from "./runtime";
 
 async function main() {
   const config = loadConfig();
+  redact(sensitiveValues(config));
   log("config_valid", { photon_credentials: config.photon.kind });
 
   const link = await connectReasoningAgent(config);

@@ -68,6 +68,26 @@ def test_mentioned_dm_message_reads_group_and_replies_with_asi_one():
     assert asi.calls[0][-1] == {"role": "user", "content": "@agent hello"}
 
 
+def test_preflight_confirms_group_read_and_asi_one_in_a_checkable_reply():
+    splitwise, asi = FakeSplitwise(), FakeAsi()
+
+    reply = respond_to_chat(**dm("@agent preflight"), settings=settings(), splitwise=splitwise, asi=asi)
+
+    assert reply == 'PREFLIGHT OK group="MHacks Weekend" demo_user_member=yes asi1=yes'
+    assert splitwise.calls == [4242] and len(asi.calls) == 1
+
+
+def test_preflight_reports_failure_when_splitwise_is_unreadable():
+    reply = respond_to_chat(
+        **dm("@agent preflight"),
+        settings=settings(),
+        splitwise=FakeSplitwise(error=SplitwiseError("nope")),
+        asi=FakeAsi(),
+    )
+
+    assert not reply.startswith("PREFLIGHT OK")
+
+
 def test_dm_message_without_mention_is_ignored():
     splitwise, asi = FakeSplitwise(), FakeAsi()
 

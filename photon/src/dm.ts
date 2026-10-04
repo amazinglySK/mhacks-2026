@@ -15,7 +15,7 @@ export interface InboundLike {
   content: { type: string; text?: string };
 }
 
-export type RejectReason = "other_platform" | "outbound" | "other_space" | "not_text";
+export type RejectReason = "other_platform" | "outbound" | "other_space" | "not_text" | "no_sender";
 
 export type Reduction = { ok: true; message: DmMessage } | { ok: false; reason: RejectReason };
 
@@ -26,8 +26,9 @@ export function reduceInbound(message: InboundLike, demoDmId: string): Reduction
   if (message.content.type !== "text" || typeof message.content.text !== "string") {
     return { ok: false, reason: "not_text" };
   }
+  if (!message.sender) return { ok: false, reason: "no_sender" };
   return {
     ok: true,
-    message: { messageId: message.id, sender: message.sender?.id ?? "unknown", text: message.content.text },
+    message: { messageId: message.id, sender: message.sender.id, text: message.content.text },
   };
 }

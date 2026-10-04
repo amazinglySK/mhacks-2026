@@ -7,7 +7,6 @@ export interface Config {
   demoDmId: string;
   photonAgentSeed: string;
   reasoningAgentAddress: string;
-  agentverseUrl: string;
 }
 
 export class ConfigError extends Error {
@@ -55,6 +54,13 @@ export function loadConfig(env: Env = process.env): Config {
     demoDmId: read("DEMO_DM_ID")!,
     photonAgentSeed: read("PHOTON_AGENT_SEED")!,
     reasoningAgentAddress: read("REASONING_AGENT_ADDRESS")!,
-    agentverseUrl: read("AGENTVERSE_URL") ?? "https://agentverse.ai",
   };
+}
+
+/** Secrets and real identifiers that must never appear in log output. */
+export function sensitiveValues(config: Config): string[] {
+  const values = [config.demoDmId, config.demoDmId.split(";").at(-1) ?? "", config.photonAgentSeed];
+  if (config.photon.kind === "project") values.push(config.photon.projectSecret);
+  else values.push(config.photon.client.token, config.photon.client.phone);
+  return values;
 }

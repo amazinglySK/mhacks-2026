@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigError, loadConfig } from "./config";
+import { ConfigError, loadConfig, sensitiveValues } from "./config";
 
 const base = {
   DEMO_DM_ID: "any;-;+15550000000",
@@ -48,6 +48,13 @@ describe("loadConfig", () => {
       expect(message).toContain(name);
     }
     expect(message).not.toContain(secret);
+  });
+
+  test("lists the DM handle and secrets as sensitive", () => {
+    const config = loadConfig({ ...base, PHOTON_ADDRESS: "a", PHOTON_TOKEN: "tok", PHOTON_PHONE: "+15551111111" });
+    expect(sensitiveValues(config)).toEqual(
+      expect.arrayContaining([base.DEMO_DM_ID, "+15550000000", base.PHOTON_AGENT_SEED, "tok", "+15551111111"]),
+    );
   });
 
   test("requires one complete set of Photon credentials", () => {

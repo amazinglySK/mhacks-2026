@@ -5,7 +5,7 @@ import { ReasoningAgentLink } from "./agentverse/link";
 import type { Config } from "./config";
 import { logError, log } from "./log";
 
-export const POLL_INTERVAL_MS = 1000;
+const POLL_INTERVAL_MS = 1000;
 
 export async function connectPhoton(config: Config) {
   const shared = { telemetry: false, options: { logLevel: "warn" as const } };
@@ -22,7 +22,7 @@ export async function connectPhoton(config: Config) {
 
 export type PhotonApp = Awaited<ReturnType<typeof connectPhoton>>;
 
-/** Throws when the configured DM cannot be resolved on the Photon line. */
+/** Resolves the configured DM on the Photon line; this is the startup reachability check. */
 export async function openDemoDm(app: PhotonApp, config: Config) {
   return imessage(app).space.get(config.demoDmId);
 }
@@ -31,24 +31,23 @@ export async function connectReasoningAgent(config: Config): Promise<ReasoningAg
   const link = new ReasoningAgentLink({
     identity: identityFromSeed(config.photonAgentSeed),
     reasoningAgentAddress: config.reasoningAgentAddress,
-    agentverseUrl: config.agentverseUrl,
   });
   await link.connect();
   return link;
 }
 
-/** Polls Photon's mailbox until `signal` aborts, handing each reply to `onReply`. */
+/** Polls Photon's mailbox until `signal` aborts, handing each reply to `deliver`. */
 export async function pollReplies(
   link: ReasoningAgentLink,
-  onReply: (text: string) => Promise<void>,
+  deliver: (text: string) => Promise<void>,
   signal: AbortSignal,
 ): Promise<void> {
   while (!signal.aborted) {
     try {
-      for (const text of await link.receive()) {
-        await onReply(text);
+      await link.receive(async (text) => {
+        await deliver(text);
         log("reply_delivered");
-      }
+      });
     } catch (error) {
       logError("mailbox_poll_failed", error);
     }

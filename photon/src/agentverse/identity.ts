@@ -35,14 +35,14 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** Mirrors `uagents_core.identity.derive_key_from_seed(seed, "agent", index)`. */
-function deriveSecretKey(seed: string, index: number): Uint8Array {
-  const derivation = sha256(concat(encoder.encode("agent"), Uint8Array.of(index)));
+/** Mirrors `uagents_core.identity.Identity.from_seed(seed, 0)`. */
+function deriveSecretKey(seed: string): Uint8Array {
+  const derivation = sha256(concat(encoder.encode("agent"), Uint8Array.of(0)));
   return sha256(concat(derivation, sha256(encoder.encode(seed))));
 }
 
-export function identityFromSeed(seed: string, index = 0): AgentIdentity {
-  const secretKey = deriveSecretKey(seed, index);
+export function identityFromSeed(seed: string): AgentIdentity {
+  const secretKey = deriveSecretKey(seed);
   const publicKey = secp.getPublicKey(secretKey, true);
   return {
     address: encodeBech32("agent", publicKey),

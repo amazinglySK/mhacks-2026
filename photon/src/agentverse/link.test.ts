@@ -114,15 +114,27 @@ describe("ReasoningAgentLink", () => {
     ]);
   });
 
-  test("receive returns reply text from the Reasoning Agent, acknowledges it, and deletes it", async () => {
+  test("receive delivers reply text from the Reasoning Agent, acknowledges it, and deletes it", async () => {
     const l = link();
     await l.connect();
     mailbox = [replyFrom(reasoning, "Hi from MHacks Weekend", "uuid-1")];
+    const delivered: string[] = [];
 
-    expect(await l.receive()).toEqual(["Hi from MHacks Weekend"]);
+    await l.receive(async (text) => void delivered.push(text));
+
+    expect(delivered).toEqual(["Hi from MHacks Weekend"]);
     expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith("/mailbox/uuid-1"))).toBe(true);
     const ack = calls.find((c) => c.url === HOSTED_ENDPOINT)!.body as Envelope;
     expect(ack.schema_digest).toBe(CHAT_ACK_SCHEMA_DIGEST);
+  });
+
+  test("receive keeps a reply in the mailbox when delivery to the DM fails", async () => {
+    const l = link();
+    await l.connect();
+    mailbox = [replyFrom(reasoning, "Hi", "uuid-1")];
+
+    expect(l.receive(async () => Promise.reject(new Error("send failed")))).rejects.toThrow("send failed");
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });
 
   test("receive drops envelopes that are unsigned or not from the Reasoning Agent", async () => {
@@ -131,8 +143,11 @@ describe("ReasoningAgentLink", () => {
     const forged = replyFrom(reasoning, "forged", "uuid-forged");
     forged.envelope = { ...forged.envelope, signature: replyFrom(stranger, "x").envelope.signature };
     mailbox = [replyFrom(stranger, "spoof", "uuid-stranger"), forged];
+    const delivered: string[] = [];
 
-    expect(await l.receive()).toEqual([]);
+    await l.receive(async (text) => void delivered.push(text));
+
+    expect(delivered).toEqual([]);
     expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(2);
     expect(calls.some((c) => c.url === HOSTED_ENDPOINT)).toBe(false);
   });
