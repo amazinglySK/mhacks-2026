@@ -139,7 +139,8 @@ export async function commitBatch(
   client: SplitwiseClient,
   now: string,
 ): Promise<Outcome> {
-  if (messageId && session.handled_confirmation_ids.includes(messageId)) {
+  const handledIds = session.handled_confirmation_ids ?? [];
+  if (messageId && handledIds.includes(messageId)) {
     return { session, summary: "This confirmation was already handled. Nothing was written to Splitwise.", created: [] };
   }
   if (session.status !== "stopped") {
@@ -163,8 +164,8 @@ export async function commitBatch(
 
   const group = await client.getGroup();
   const handled = messageId
-    ? [...session.handled_confirmation_ids, messageId].slice(-HANDLED_CONFIRMATIONS_LIMIT)
-    : session.handled_confirmation_ids;
+    ? [...handledIds, messageId].slice(-HANDLED_CONFIRMATIONS_LIMIT)
+    : handledIds;
   const result = await commitDrafts(session.drafts, client, group.id, now);
   return {
     session: {

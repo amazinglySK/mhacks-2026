@@ -11,7 +11,7 @@ export default defineDynamic({
   events: {
     "turn.started": () => {
       const { status, drafts } = session.get();
-      const lines = drafts.map((d) => {
+      const lines = (drafts ?? []).map((d) => {
         const shares = d.shares.map((s) => `${s.user_id} paid ${s.paid_share} owed ${s.owed_share}`).join("; ");
         const source = d.source_messages.map((m) => m.id).join(", ");
         return `- ${d.id}: ${d.description} ${d.currency_code} $${d.amount} [${shares}] (${d.status}, from message ${source})`;

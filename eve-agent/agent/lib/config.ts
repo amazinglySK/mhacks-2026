@@ -43,6 +43,8 @@ export function requireConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig
 }
 
 function conversationHandle(id: string): string {
-  const parts = id.split(";-;");
-  return (parts.at(-1) ?? id).trim();
+  // Eve Photon thread ids are `imessage:<chatGuid>` or `imessage:<chatGuid>~<line>`.
+  const chatGuid = id.replace(/^imessage:/, "").split("~")[0] ?? id;
+  const parts = chatGuid.split(";-;");
+  return (parts.at(-1) ?? chatGuid).trim();
 }

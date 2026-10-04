@@ -214,6 +214,18 @@ test("Commit of a stopped shown batch creates one Expense and marks the Draft co
   assert.match(summary, /Open Splitwise/);
 });
 
+test("Commit of a stopped batch works when handled confirmation IDs were never stored", async () => {
+  const { client, creates } = countingClient();
+  const ready = await stopped(pizza());
+  delete (ready as { handled_confirmation_ids?: string[] }).handled_confirmation_ids;
+
+  const { session: after, summary } = await commitBatch(ready, "commit-1", client, "2026-10-04T06:10:00.000Z");
+
+  assert.equal(creates.length, 1);
+  assert.equal(after.drafts[0].status, "committed");
+  assert.match(summary, /Committed to Splitwise/);
+});
+
 test("Commit before stop is refused and writes nothing", async () => {
   const { client, creates } = countingClient();
   const session = active(pizza());

@@ -18,7 +18,10 @@ const live = {
 test("the configured DM is accepted and any other conversation is dropped", () => {
   assert.equal(allowConversation(DEMO_DM, DEMO_DM), true);
   assert.equal(allowConversation("iMessage;-;+15550000000", DEMO_DM), true);
+  assert.equal(allowConversation("imessage:iMessage;-;+15550000000", DEMO_DM), true);
+  assert.equal(allowConversation("imessage:iMessage;-;+15550000000~+16280000000", DEMO_DM), true);
   assert.equal(allowConversation("any;-;+15559999999", DEMO_DM), false);
+  assert.equal(allowConversation("imessage:iMessage;-;+15559999999~+16280000000", DEMO_DM), false);
 });
 
 test("missing required configuration names the setting without its value", () => {
