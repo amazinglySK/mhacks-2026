@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigError, loadConfig, sensitiveValues } from "./config";
+import { ConfigError, loadConfig, loadPhotonCredentials, sensitiveValues } from "./config";
 
 const base = {
   DEMO_DM_ID: "any;-;+15550000000",
@@ -55,6 +55,15 @@ describe("loadConfig", () => {
     expect(sensitiveValues(config)).toEqual(
       expect.arrayContaining([base.DEMO_DM_ID, "+15550000000", base.PHOTON_AGENT_SEED, "tok", "+15551111111"]),
     );
+  });
+
+  test("loads Photon credentials alone before the DM is known", () => {
+    expect(loadPhotonCredentials({ PHOTON_PROJECT_ID: "p", PHOTON_PROJECT_SECRET: "s" })).toEqual({
+      kind: "project",
+      projectId: "p",
+      projectSecret: "s",
+    });
+    expect(() => loadPhotonCredentials({})).toThrow(ConfigError);
   });
 
   test("requires one complete set of Photon credentials", () => {

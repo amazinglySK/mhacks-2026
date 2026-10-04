@@ -6,7 +6,7 @@ import { connectPhoton, openDemoDm } from "../runtime";
 const TIMEOUT_MS = 120_000;
 
 const config = loadConfig();
-const app = await connectPhoton(config);
+const app = await connectPhoton(config.photon);
 const dm = await openDemoDm(app, config);
 const sentAt = new Date();
 await dm.send("Photon preflight: reply to this message with anything.");

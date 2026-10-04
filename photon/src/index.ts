@@ -11,7 +11,7 @@ async function main() {
   const link = await connectReasoningAgent(config);
   log("reasoning_agent_connected");
 
-  const app = await connectPhoton(config);
+  const app = await connectPhoton(config.photon);
   const dm = await openDemoDm(app, config);
   log("demo_dm_reachable");
 

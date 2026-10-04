@@ -5,6 +5,7 @@
   "scripts": {
     "start": "bun src/index.ts",
     "register": "uv run --no-project --env-file .env --with 'uagents-core>=0.4.11' scripts/register_mailbox.py",
+    "find-dm": "bun src/preflight/find-dm.ts",
     "preflight:photon": "bun src/preflight/photon.ts",
     "preflight:agentverse": "bun src/preflight/agentverse.ts",
     "typecheck": "tsc --noEmit",

@@ -2,22 +2,22 @@ import { Spectrum } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { identityFromSeed } from "./agentverse/identity";
 import { ReasoningAgentLink } from "./agentverse/link";
-import type { Config } from "./config";
+import type { Config, PhotonCredentials } from "./config";
 import { logError, log } from "./log";
 
 const POLL_INTERVAL_MS = 1000;
 
-export async function connectPhoton(config: Config) {
+export async function connectPhoton(photon: PhotonCredentials) {
   const shared = { telemetry: false, options: { logLevel: "warn" as const } };
-  if (config.photon.kind === "project") {
+  if (photon.kind === "project") {
     return Spectrum({
       ...shared,
-      projectId: config.photon.projectId,
-      projectSecret: config.photon.projectSecret,
+      projectId: photon.projectId,
+      projectSecret: photon.projectSecret,
       providers: [imessage.config()],
     });
   }
-  return Spectrum({ ...shared, providers: [imessage.config({ clients: [config.photon.client] })] });
+  return Spectrum({ ...shared, providers: [imessage.config({ clients: [photon.client] })] });
 }
 
 export type PhotonApp = Awaited<ReturnType<typeof connectPhoton>>;

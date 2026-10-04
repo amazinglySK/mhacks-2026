@@ -19,31 +19,47 @@ const PROJECT_VARS = ["PHOTON_PROJECT_ID", "PHOTON_PROJECT_SECRET"] as const;
 const CLIENT_VARS = ["PHOTON_ADDRESS", "PHOTON_TOKEN", "PHOTON_PHONE"] as const;
 const REQUIRED_VARS = ["DEMO_DM_ID", "PHOTON_AGENT_SEED", "REASONING_AGENT_ADDRESS"] as const;
 
-/** Validates the local `.env`. Error messages name variables only, never their values. */
-export function loadConfig(env: Env = process.env): Config {
-  const read = (name: string) => env[name]?.trim() || undefined;
+const reader = (env: Env) => (name: string) => env[name]?.trim() || undefined;
+
+function photonCredentials(env: Env): { photon?: PhotonCredentials; problem?: string } {
+  const read = reader(env);
   const missingIn = (names: readonly string[]) => names.filter((name) => !read(name));
-
-  const problems: string[] = [];
-  const missing = missingIn(REQUIRED_VARS);
-  if (missing.length) problems.push(`missing ${missing.join(", ")}`);
-
   const missingProject = missingIn(PROJECT_VARS);
   const missingClient = missingIn(CLIENT_VARS);
-  let photon: PhotonCredentials | undefined;
   if (missingProject.length === 0) {
-    photon = { kind: "project", projectId: read("PHOTON_PROJECT_ID")!, projectSecret: read("PHOTON_PROJECT_SECRET")! };
-  } else if (missingClient.length === 0) {
-    photon = {
-      kind: "client",
-      client: { address: read("PHOTON_ADDRESS")!, token: read("PHOTON_TOKEN")!, phone: read("PHOTON_PHONE")! },
-    };
-  } else {
-    problems.push(
-      `Photon credentials incomplete: set ${PROJECT_VARS.join(" + ")} (missing ${missingProject.join(", ")}) ` +
-        `or ${CLIENT_VARS.join(" + ")} (missing ${missingClient.join(", ")})`,
-    );
+    return { photon: { kind: "project", projectId: read("PHOTON_PROJECT_ID")!, projectSecret: read("PHOTON_PROJECT_SECRET")! } };
   }
+  if (missingClient.length === 0) {
+    return {
+      photon: {
+        kind: "client",
+        client: { address: read("PHOTON_ADDRESS")!, token: read("PHOTON_TOKEN")!, phone: read("PHOTON_PHONE")! },
+      },
+    };
+  }
+  return {
+    problem:
+      `Photon credentials incomplete: set ${PROJECT_VARS.join(" + ")} (missing ${missingProject.join(", ")}) ` +
+      `or ${CLIENT_VARS.join(" + ")} (missing ${missingClient.join(", ")})`,
+  };
+}
+
+/** Photon credentials alone, for setup tools that run before the rest of `.env` is filled. */
+export function loadPhotonCredentials(env: Env = process.env): PhotonCredentials {
+  const { photon, problem } = photonCredentials(env);
+  if (!photon) throw new ConfigError(`Invalid Photon Runtime configuration: ${problem}`);
+  return photon;
+}
+
+/** Validates the local `.env`. Error messages name variables only, never their values. */
+export function loadConfig(env: Env = process.env): Config {
+  const read = reader(env);
+  const problems: string[] = [];
+  const missing = REQUIRED_VARS.filter((name) => !read(name));
+  if (missing.length) problems.push(`missing ${missing.join(", ")}`);
+
+  const { photon, problem } = photonCredentials(env);
+  if (problem) problems.push(problem);
 
   if (problems.length || !photon) {
     throw new ConfigError(`Invalid Photon Runtime configuration: ${problems.join("; ")}`);
