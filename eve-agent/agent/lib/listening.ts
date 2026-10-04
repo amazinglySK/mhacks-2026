@@ -9,6 +9,8 @@ import type { SplitwiseClient } from "./splitwise.ts";
 export type ListeningSession = {
   status: "none" | "active" | "stopped";
   drafts: Draft[];
+  /** Drafts already written to Splitwise, kept across reset so a retry never repeats a real write. */
+  committed: Draft[];
   /** The batch fingerprint last shown to the user after stopping; Commit must match it. */
   shown_fingerprint: string | null;
   /** Confirmation message IDs already acted on, so a redelivered webhook never writes twice. */
@@ -21,6 +23,7 @@ export type Outcome = { session: ListeningSession; summary: string; created?: Ex
 export const NO_SESSION: ListeningSession = {
   status: "none",
   drafts: [],
+  committed: [],
   shown_fingerprint: null,
   handled_confirmation_ids: [],
 };
@@ -28,6 +31,33 @@ export const NO_SESSION: ListeningSession = {
 const HANDLED_CONFIRMATIONS_LIMIT = 50;
 
 const NOTHING_WRITTEN = "Nothing has been written to Splitwise.";
+
+/** Fields that survive a new or cleared Listening Session. */
+function durable(session: ListeningSession): Pick<ListeningSession, "committed" | "handled_confirmation_ids"> {
+  return {
+    committed: session.committed ?? [],
+    handled_confirmation_ids: session.handled_confirmation_ids,
+  };
+}
+
+/** Clears the session and uncommitted Drafts. Keeps committed mappings and handled confirmation IDs. */
+export function resetListening(session: ListeningSession): Outcome {
+  const committed = [
+    ...(session.committed ?? []),
+    ...session.drafts.filter((draft) => draft.status === "committed"),
+  ];
+  return {
+    session: {
+      ...NO_SESSION,
+      ...durable(session),
+      committed,
+    },
+    summary:
+      committed.length === 0
+        ? "Demo reset. Cleared the Listening Session and uncommitted Drafts."
+        : `Demo reset. Cleared the Listening Session and uncommitted Drafts. Kept ${committed.length} committed mapping${committed.length === 1 ? "" : "s"}.`,
+  };
+}
 
 export function startListening(session: ListeningSession): Outcome {
   if (session.status === "active") {
@@ -37,7 +67,7 @@ export function startListening(session: ListeningSession): Outcome {
     return { session, summary: `This Listening Session is stopped and can't be resumed. Its ${count(session.drafts)} wait for review.` };
   }
   return {
-    session: { ...NO_SESSION, status: "active", handled_confirmation_ids: session.handled_confirmation_ids },
+    session: { ...NO_SESSION, ...durable(session), status: "active" },
     summary: "Listening Session started. Tell me about shared Expenses, then say @agent stop listening.",
   };
 }
@@ -79,7 +109,7 @@ export async function stopListening(session: ListeningSession, client: Splitwise
   if (session.status === "stopped") return summarizeSession(session, client);
   if (session.drafts.length === 0) {
     return {
-      session: { ...NO_SESSION, handled_confirmation_ids: session.handled_confirmation_ids },
+      session: { ...NO_SESSION, ...durable(session) },
       summary: "Stopped listening. There were no Drafts, so there is nothing to record in Splitwise.",
     };
   }

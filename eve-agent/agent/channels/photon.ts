@@ -1,9 +1,8 @@
 import { defaultPhotonAuth, photonIMessageChannel } from "eve/channels/photon";
+import { allowConversation, requireConfig } from "../lib/config";
 
 async function photonCredentials() {
-  const projectId = process.env.IMESSAGE_PROJECT_ID;
-  const projectSecret = process.env.IMESSAGE_PROJECT_SECRET;
-  if (!projectId || !projectSecret) throw new Error("Photon project credentials are required.");
+  const { projectId, projectSecret } = requireConfig();
   return { projectId, projectSecret };
 }
 
@@ -12,7 +11,10 @@ export default photonIMessageChannel({
   webhookSecret: process.env.IMESSAGE_WEBHOOK_SECRET,
   turnPolicy: "queue",
   // Tools read the source message ID from the turn's auth, so a Draft never depends on the model echoing it.
-  onMessage(_ctx, message) {
+  // Conversations other than the configured DM never reach the model or session history.
+  onMessage(ctx, message) {
+    const { demoDmId } = requireConfig();
+    if (!allowConversation(ctx.thread.id, demoDmId)) return null;
     const auth = defaultPhotonAuth(message);
     return { auth: { ...auth, attributes: { ...auth.attributes, message_id: message.id } } };
   },

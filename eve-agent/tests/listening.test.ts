@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyDraftChanges, batchFingerprint, buildDraft, DraftError } from "../agent/lib/money.ts";
 import type { Draft, Group } from "../agent/lib/money.ts";
-import { addDraft, commitBatch, modifyDraft, NO_SESSION, startListening, stopListening, summarizeSession } from "../agent/lib/listening.ts";
+import { addDraft, commitBatch, modifyDraft, NO_SESSION, resetListening, startListening, stopListening, summarizeSession } from "../agent/lib/listening.ts";
 import type { ListeningSession } from "../agent/lib/listening.ts";
 import { SplitwiseError, type SplitwiseClient } from "../agent/lib/splitwise.ts";
 import type { ExpensePayload } from "../agent/lib/money.ts";
@@ -273,4 +273,43 @@ test("a failed Draft stays uncommitted and the summary names it", async () => {
   assert.match(summary, /Couldn't record Pizza \$30\.00/);
   assert.match(summary, /bad shares/);
   assert.match(summary, /Reply commit to retry/);
+});
+
+test("reset clears an uncommitted Draft and the session", () => {
+  const { session, summary } = resetListening(active(pizza()));
+
+  assert.equal(session.status, "none");
+  assert.deepEqual(session.drafts, []);
+  assert.deepEqual(session.committed, []);
+  assert.match(summary, /reset/i);
+});
+
+test("reset keeps a committed mapping so a replayed confirmation writes nothing", async () => {
+  const { client, creates } = countingClient();
+  const committed = await commitBatch(await stopped(pizza()), "commit-1", client, "2026-10-04T06:10:00.000Z");
+
+  const reset = resetListening(committed.session);
+  const replay = await commitBatch(reset.session, "commit-1", client, "2026-10-04T06:12:00.000Z");
+
+  assert.equal(reset.session.status, "none");
+  assert.deepEqual(reset.session.drafts, []);
+  assert.equal(reset.session.committed[0]?.splitwise_expense_id, 9001);
+  assert.deepEqual(reset.session.handled_confirmation_ids, ["commit-1"]);
+  assert.equal(creates.length, 1);
+  assert.deepEqual(replay.created, []);
+  assert.equal(replay.session.committed[0]?.splitwise_expense_id, 9001);
+});
+
+test("starting after reset keeps committed mappings and has no uncommitted Drafts", async () => {
+  const { client } = countingClient();
+  const committed = await commitBatch(await stopped(pizza()), "commit-1", client, "2026-10-04T06:10:00.000Z");
+  const reset = resetListening(committed.session);
+
+  const { session, summary } = startListening(reset.session);
+
+  assert.equal(session.status, "active");
+  assert.deepEqual(session.drafts, []);
+  assert.equal(session.committed[0]?.splitwise_expense_id, 9001);
+  assert.deepEqual(session.handled_confirmation_ids, ["commit-1"]);
+  assert.match(summary, /started/i);
 });

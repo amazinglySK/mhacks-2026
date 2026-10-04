@@ -8,6 +8,7 @@ export const PIZZA = "I paid $30 for pizza with Alex and Maya, split equally.";
 export const CHANGE_PIZZA = "Actually make the pizza $36.";
 export const GAS = "I paid $20 for gas with Alex, split equally.";
 export const COMMIT = "commit";
+export const RESET = "reset the demo";
 
 /** True when commit_batch sent at least one Splitwise create. */
 export function sentACreate(output: unknown): boolean {
