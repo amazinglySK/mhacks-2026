@@ -1,0 +1,25 @@
+{
+  "name": "photon-runtime",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun src/index.ts",
+    "register": "uv run --no-project --env-file .env --with 'uagents-core>=0.4.11' scripts/register_mailbox.py",
+    "preflight:photon": "bun src/preflight/photon.ts",
+    "preflight:agentverse": "bun src/preflight/agentverse.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "@noble/secp256k1": "^3.2.0",
+    "bech32": "^2.0.0",
+    "spectrum-ts": "^12.10.1"
+  }
+}

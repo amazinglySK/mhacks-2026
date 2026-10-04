@@ -1,0 +1,13 @@
+[project]
+name = "reasoning-agent"
+version = "0.1.0"
+description = "Hosted Agentverse Reasoning Agent for the Shared-Money Agent"
+requires-python = ">=3.11"
+dependencies = ["requests>=2.31"]
+
+[dependency-groups]
+dev = ["pytest>=8", "uagents>=0.25.5"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -33,21 +33,28 @@ The Reasoning Agent never invents a Splitwise user ID.
 Only the local Photon Runtime reads these values:
 
 ```dotenv
-# Explicit Photon cloud client credentials
+# Photon cloud credentials: EITHER the project pair (tokens auto-renew)...
+PHOTON_PROJECT_ID=
+PHOTON_PROJECT_SECRET=
+# ...OR one explicit cloud client (token is not auto-renewed)
 PHOTON_ADDRESS=
 PHOTON_TOKEN=
 PHOTON_PHONE=
 
-# Only this DM may drive the demo
+# Only this DM may drive the demo (Spectrum space id)
 DEMO_DM_ID=
 
-# Agentverse mailbox connection
+# Photon's own Agentverse agent identity and the hosted Reasoning Agent it talks to
+PHOTON_AGENT_SEED=
+REASONING_AGENT_ADDRESS=
+
+# Used only by the one-time `bun run register`
 AGENTVERSE_API_KEY=
-AGENTVERSE_AGENT_ADDRESS=
-AGENTVERSE_SCHEMA_DIGEST=
 ```
 
-The implementation may adapt these names to the SDK's exact constructor fields, but the runtime must fail at startup if any required value is missing. Photon must not receive the Splitwise API key.
+The runtime fails at startup if any required value is missing, naming the variables but never their values. Photon must not receive the Splitwise API key. See `photon/.env.example`.
+
+Photon is itself a signed Agentverse mailbox agent: it derives an `agent1…` address from `PHOTON_AGENT_SEED`, submits Agent Chat Protocol envelopes to the Reasoning Agent's Almanac endpoint, and polls its own mailbox for replies. The Agent Chat Protocol schema digests are constants in `photon/src/agentverse/link.ts`, not configuration.
 
 ### Reasoning Agent secrets
 
@@ -63,6 +70,8 @@ PHOTON_SENDER_ADDRESS=
 `PHOTON_SENDER_ADDRESS` authenticates reset and message envelopes from the one trusted Photon Runtime. `ASI1_API_KEY` and `ASI1_BASE_URL` are supplied by Agentverse and must not be duplicated.
 
 Actual secret values and IDs never belong in Git, GitHub issues, or logs.
+
+The hosted agent's code is `reasoning-agent/agent.py` plus `reasoning-agent/shared_money.py`; both files go into the Agentverse hosted editor. Setup order and the preflight record live in `docs/agents/preflight.md`.
 
 ## Startup behavior
 
