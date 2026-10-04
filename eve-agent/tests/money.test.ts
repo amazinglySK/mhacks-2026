@@ -1,0 +1,120 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { buildDraft, describeDraft, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
+import type { ExpenseInput, Group } from "../agent/lib/money.ts";
+
+const DEMO_USER = 100;
+const GROUP: Group = {
+  id: 4242,
+  name: "MHacks Weekend",
+  members: [
+    { id: 100, first_name: "Demo", last_name: "User" },
+    { id: 101, first_name: "Alex", last_name: null },
+    { id: 102, first_name: "Maya", last_name: "Lee" },
+    { id: 103, first_name: "Sam", last_name: "Park" },
+    { id: 104, first_name: "Sam", last_name: "Ortiz" },
+  ],
+};
+const META = { id: "d1", now: "2026-10-04T06:00:00.000Z", source: { id: "m1", sender: "+15550100" } };
+
+function draft(input: Partial<ExpenseInput>) {
+  return buildDraft({ description: "Pizza", amount: "30", participants: ["Alex", "Maya"], ...input }, GROUP, DEMO_USER, META);
+}
+
+function rejection(input: Partial<ExpenseInput>): string {
+  try {
+    draft(input);
+  } catch (error) {
+    assert.ok(error instanceof DraftError);
+    return error.message;
+  }
+  assert.fail("expected the Draft to be rejected");
+}
+
+test("equal shares put the whole cost on the payer's paid share", () => {
+  assert.deepEqual(equalShares(3000, 100, [100, 101, 102]), [
+    { user_id: 100, paid_share: "30.00", owed_share: "10.00" },
+    { user_id: 101, paid_share: "0.00", owed_share: "10.00" },
+    { user_id: 102, paid_share: "0.00", owed_share: "10.00" },
+  ]);
+});
+
+test("the rounding remainder goes to the payer's owed share", () => {
+  const shares = equalShares(1000, 100, [100, 101, 102]);
+  assert.deepEqual(shares.map((s) => s.owed_share), ["3.34", "3.33", "3.33"]);
+  assert.deepEqual(validateDraft({ amount: "10.00", shares }), []);
+});
+
+test("the pizza message becomes one Draft with three $10 owed shares and the demo user as payer", () => {
+  const pizza = draft({ payer: "me" });
+
+  assert.equal(pizza.amount, "30.00");
+  assert.equal(pizza.status, "draft");
+  assert.deepEqual(pizza.shares, equalShares(3000, 100, [100, 101, 102]));
+  assert.deepEqual(pizza.source_messages, [{ id: "m1", sender: "+15550100" }]);
+  assert.equal(
+    describeDraft(pizza, GROUP),
+    "Pizza $30.00, paid by Demo User, split equally: Demo User $10.00, Alex $10.00, Maya Lee $10.00",
+  );
+});
+
+test("the sender pays when no payer is named", () => {
+  assert.equal(draft({ payer: undefined }).shares[0].user_id, DEMO_USER);
+});
+
+test("a named payer pays and the sender is a Participant", () => {
+  const gas = draft({ description: "Gas", amount: "20", payer: "Alex", participants: ["me"] });
+
+  assert.deepEqual(gas.shares, [
+    { user_id: 101, paid_share: "20.00", owed_share: "10.00" },
+    { user_id: 100, paid_share: "0.00", owed_share: "10.00" },
+  ]);
+});
+
+test("names match first or full name, ignoring case, spacing, and a leading @", () => {
+  const taxi = draft({ participants: ["sam  PARK", "@maya"] });
+
+  assert.deepEqual(taxi.shares.map((s) => s.user_id), [100, 103, 102]);
+});
+
+test("a Participant named twice is counted once", () => {
+  assert.equal(draft({ participants: ["Alex", "alex", "me"] }).shares.length, 2);
+});
+
+for (const amount of [undefined, "", "abc", "0", "-5"]) {
+  test(`a missing or invalid amount (${JSON.stringify(amount)}) is asked for, never guessed`, () => {
+    assert.match(rejection({ amount }), /Ask how much/);
+  });
+}
+
+test("amounts are read as stated and rounded to the cent", () => {
+  assert.equal(parseAmount("$1,200"), 120000);
+  assert.equal(parseAmount("12.5"), 1250);
+  assert.equal(parseAmount("12.345"), 1235);
+});
+
+test("an unknown Participant blocks the Draft and lists the group members", () => {
+  const message = rejection({ participants: ["Zed"] });
+
+  assert.match(message, /Zed is not in MHacks Weekend/);
+  assert.match(message, /Demo User, Alex, Maya Lee, Sam Park, Sam Ortiz/);
+});
+
+test("an ambiguous first name blocks the Draft and names the choices", () => {
+  assert.match(rejection({ participants: ["Sam"] }), /Sam: Sam Park or Sam Ortiz/);
+});
+
+test("an Expense nobody shares with the payer is rejected", () => {
+  assert.match(rejection({ participants: ["me"] }), /Ask who split it/);
+});
+
+test("an amount too small to split is rejected before it becomes a Draft", () => {
+  assert.match(rejection({ amount: "0.03", participants: ["Alex", "Maya", "Sam Park", "Sam Ortiz"] }), /a share is negative/);
+});
+
+test("validation catches unbalanced and negative shares", () => {
+  const shares = equalShares(3000, 100, [100, 101, 102]);
+  shares[1] = { ...shares[1], owed_share: "-10.00" };
+
+  assert.deepEqual(validateDraft({ amount: "30.00", shares }), ["owed shares don't add up to the cost", "a share is negative"]);
+});

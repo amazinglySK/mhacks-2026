@@ -1,4 +1,4 @@
-import { photonIMessageChannel } from "eve/channels/photon";
+import { defaultPhotonAuth, photonIMessageChannel } from "eve/channels/photon";
 
 async function photonCredentials() {
   const projectId = process.env.IMESSAGE_PROJECT_ID;
@@ -11,6 +11,11 @@ export default photonIMessageChannel({
   credentials: photonCredentials,
   webhookSecret: process.env.IMESSAGE_WEBHOOK_SECRET,
   turnPolicy: "queue",
+  // Tools read the source message ID from the turn's auth, so a Draft never depends on the model echoing it.
+  onMessage(_ctx, message) {
+    const auth = defaultPhotonAuth(message);
+    return { auth: { ...auth, attributes: { ...auth.attributes, message_id: message.id } } };
+  },
   // Photon stops typing on a timer that never fires once a serverless turn ends, so a
   // no_reply turn would leave the bubble up forever. These replace the defaults that start it.
   events: {

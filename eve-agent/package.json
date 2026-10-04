@@ -10,8 +10,9 @@
     "build": "eve build",
     "deploy": "eve deploy",
     "dev": "eve dev",
-    "eval": "eve eval",
+    "eval": "SPLITWISE_CLIENT=fake eve eval",
     "start": "eve start",
+    "test": "node --test \"tests/*.test.ts\"",
     "typecheck": "tsc"
   },
   "dependencies": {
