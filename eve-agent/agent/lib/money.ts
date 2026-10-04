@@ -1,6 +1,8 @@
 // Pure money logic, ported from reasoning-agent/shared_money.py. Amounts are integer cents
 // internally and two-decimal strings at the edges, so no float rounding reaches Splitwise.
 
+import { createHash } from "node:crypto";
+
 export const CURRENCY_CODE = "USD";
 const SELF_REFERENCES = new Set(["me", "i", "myself"]);
 
@@ -127,6 +129,14 @@ export function buildDraft(
     throw new DraftError(`${description} $${draft.amount} can't be split that way: ${problems.join("; ")}.`);
   }
   return draft;
+}
+
+/** Identifies exactly what Commit would send for these Drafts, so a confirmed batch can be matched to the one shown. */
+export function batchFingerprint(drafts: Draft[]): string {
+  const batch = drafts
+    .filter((d) => d.status !== "committed")
+    .map((d) => [d.id, d.description, d.amount, d.currency_code, d.shares.map((s) => [s.user_id, s.paid_share, s.owed_share])]);
+  return createHash("sha256").update(JSON.stringify(batch)).digest("hex");
 }
 
 /** The exact text the agent quotes: Expense, amount, payer, and every owed share. */

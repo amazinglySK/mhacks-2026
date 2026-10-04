@@ -1,10 +1,10 @@
 import { defineEval } from "eve/evals";
-import { noReply, PIZZA } from "../shared";
+import { listening, noReply, PIZZA } from "../shared";
 
 export default defineEval({
   description: "Banter and agreement after the pizza Draft get no reply and no second Draft.",
   async test(t) {
-    const pizza = await t.send(PIZZA);
+    const pizza = await (await listening(t)).send(PIZZA);
     const banter = await pizza.session.send("Lol ishan u need to up your food recommendation dude");
     const agreement = await banter.session.send("See, yash also agrees");
 

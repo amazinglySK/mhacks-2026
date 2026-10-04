@@ -1,11 +1,11 @@
 import { defineEval } from "eve/evals";
 import { includes } from "eve/evals/expect";
-import { PIZZA, PIZZA_SHARES } from "../shared";
+import { listening, PIZZA, PIZZA_SHARES } from "../shared";
 
 export default defineEval({
   description: "The pizza message records exactly one Draft and the reply quotes its summary facts.",
   async test(t) {
-    const turn = await t.send(PIZZA);
+    const turn = await (await listening(t)).send(PIZZA);
 
     t.succeeded();
     t.calledTool("record_draft", {

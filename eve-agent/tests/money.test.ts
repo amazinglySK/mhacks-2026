@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildDraft, describeDraft, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
+import { batchFingerprint, buildDraft, describeDraft, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
 import type { ExpenseInput, Group } from "../agent/lib/money.ts";
 
 const DEMO_USER = 100;
@@ -110,6 +110,23 @@ test("an Expense nobody shares with the payer is rejected", () => {
 
 test("an amount too small to split is rejected before it becomes a Draft", () => {
   assert.match(rejection({ amount: "0.03", participants: ["Alex", "Maya", "Sam Park", "Sam Ortiz"] }), /a share is negative/);
+});
+
+test("the batch fingerprint changes when what Commit would send changes", () => {
+  const pizza = draft({});
+  const pricier = draft({ amount: "36" });
+
+  assert.equal(batchFingerprint([pizza]), batchFingerprint([structuredClone(pizza)]));
+  assert.notEqual(batchFingerprint([pizza]), batchFingerprint([pricier]));
+  assert.notEqual(batchFingerprint([pizza]), batchFingerprint([pizza, { ...pricier, id: "d2" }]));
+  assert.notEqual(batchFingerprint([pizza]), batchFingerprint([{ ...pizza, description: "Pasta" }]));
+});
+
+test("the batch fingerprint ignores committed Drafts and timestamps", () => {
+  const pizza = draft({});
+  const committed = { ...draft({ amount: "12" }), id: "d0", status: "committed" as const };
+
+  assert.equal(batchFingerprint([pizza]), batchFingerprint([committed, { ...pizza, updated_at: "2026-10-04T07:00:00.000Z" }]));
 });
 
 test("validation catches unbalanced and negative shares", () => {
