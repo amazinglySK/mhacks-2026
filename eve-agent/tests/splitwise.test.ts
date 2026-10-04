@@ -49,6 +49,35 @@ test("HTTP 200 with a nonempty errors object is a failed create", async () => {
   );
 });
 
+test("list_expenses queries the group since a time", async () => {
+  const { fetchImpl, requests } = fakeFetch({
+    status: 200,
+    body: { expenses: [{ id: 51023, description: "Pizza" }] },
+  });
+
+  const expenses = await httpSplitwise("sw-key", 7, fetchImpl).listExpenses(7, "2026-10-04T04:00:00.000Z");
+
+  assert.deepEqual(expenses, [{ id: 51023, description: "Pizza" }]);
+  const url = new URL(requests[0].url);
+  assert.equal(`${url.origin}${url.pathname}`, "https://secure.splitwise.com/api/v3.0/get_expenses");
+  assert.equal(url.searchParams.get("group_id"), "7");
+  assert.equal(url.searchParams.get("updated_after"), "2026-10-04T04:00:00.000Z");
+  assert.equal(url.searchParams.get("limit"), "100");
+  assert.equal((requests[0].init.headers as Record<string, string>).Authorization, "Bearer sw-key");
+});
+
+test("HTTP 200 with a nonempty errors object is a failed list", async () => {
+  const { fetchImpl } = fakeFetch({
+    status: 200,
+    body: { expenses: null, errors: { base: ["Invalid API request"] } },
+  });
+
+  await assert.rejects(
+    httpSplitwise("sw-key", 7, fetchImpl).listExpenses(7, "2026-10-04T04:00:00.000Z"),
+    SplitwiseError,
+  );
+});
+
 test("a create without an Expense ID is a failure", async () => {
   const { fetchImpl } = fakeFetch({ status: 200, body: { expenses: [], errors: {} } });
 

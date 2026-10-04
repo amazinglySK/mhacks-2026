@@ -1,4 +1,4 @@
-import type { ExpensePayload, Group, Member } from "./money";
+import type { ExpensePayload, Group, ListedExpense, Member } from "./money";
 
 const SPLITWISE_API = "https://secure.splitwise.com/api/v3.0";
 const HTTP_TIMEOUT_MS = 20_000;
@@ -7,6 +7,8 @@ export interface SplitwiseClient {
   getGroup(): Promise<Group>;
   /** Creates one Expense; succeeds only with no errors object and a returned Expense ID. */
   createExpense(payload: ExpensePayload): Promise<number>;
+  /** Recent group Expenses since `updatedAfter`, used to adopt an uncertain earlier create. */
+  listExpenses(groupId: number, updatedAfter: string): Promise<ListedExpense[]>;
 }
 
 export type Splitwise = { client: SplitwiseClient; demoUserId: number };
@@ -40,6 +42,9 @@ export function splitwiseFromEnv(env: NodeJS.ProcessEnv = process.env): Splitwis
         getGroup: async () => structuredClone(FAKE_GROUP),
         async createExpense() {
           return nextId++;
+        },
+        async listExpenses() {
+          return [];
         },
       },
       demoUserId: FAKE_DEMO_USER_ID,
@@ -103,6 +108,25 @@ export function httpSplitwise(apiKey: string, groupId: number, fetchImpl: typeof
         throw new SplitwiseError(`create_expense returned no Expense ID (HTTP ${response.status})`);
       }
       return expenseId;
+    },
+    async listExpenses(groupId, updatedAfter) {
+      const params = new URLSearchParams({
+        group_id: String(groupId),
+        updated_after: updatedAfter,
+        limit: "100",
+      });
+      const response = await fetchImpl(`${SPLITWISE_API}/get_expenses?${params}`, {
+        headers,
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      });
+      const body = (await response.json().catch(() => ({}))) as Record<string, any>;
+      // Splitwise can report application errors with HTTP 200.
+      if (!response.ok || hasErrors(body.errors) || body.error) {
+        throw new SplitwiseError(`get_expenses failed (HTTP ${response.status})`);
+      }
+      const expenses = body.expenses;
+      if (!Array.isArray(expenses)) throw new SplitwiseError("get_expenses returned no expenses");
+      return expenses.filter((expense): expense is ListedExpense => expense && typeof expense === "object");
     },
   };
 }

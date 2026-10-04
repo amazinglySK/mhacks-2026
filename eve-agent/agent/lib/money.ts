@@ -178,6 +178,18 @@ export type ExpensePayload = {
   [field: string]: string | number;
 };
 
+/** Share fields Commit uses to match a Draft against a listed Expense. */
+type ListedShare = { user_id?: number; paid_share?: string | null; owed_share?: string | null };
+
+/** A group Expense as Commit reads it when checking for an earlier uncertain create. */
+export type ListedExpense = {
+  id: number;
+  description?: string | null;
+  cost?: string | null;
+  deleted_at?: string | null;
+  users?: ListedShare[];
+};
+
 /** Best-effort Commit of these Drafts: skip committed, validate, create, mark each success immediately. */
 export type CommitDraftsResult = {
   drafts: Draft[];
@@ -186,10 +198,15 @@ export type CommitDraftsResult = {
   created: ExpensePayload[];
 };
 
-/** Writes uncommitted valid Drafts through `createExpense`; a later failure never unmarks an earlier success. */
+const ATTEMPT_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+/** Writes uncommitted valid Drafts through `createExpense`; a retry adopts a matching earlier create instead of sending again. */
 export async function commitDrafts(
   drafts: Draft[],
-  client: { createExpense(payload: ExpensePayload): Promise<number> },
+  client: {
+    createExpense(payload: ExpensePayload): Promise<number>;
+    listExpenses(groupId: number, updatedAfter: string): Promise<ListedExpense[]>;
+  },
   groupId: number,
   now: string,
 ): Promise<CommitDraftsResult> {
@@ -197,6 +214,9 @@ export async function commitDrafts(
   const committed: Draft[] = [];
   const failed: { draft: Draft; reason: string }[] = [];
   const created: ExpensePayload[] = [];
+  const claimedExpenseIds = new Set(
+    next.flatMap((draft) => (typeof draft.splitwise_expense_id === "number" ? [draft.splitwise_expense_id] : [])),
+  );
   for (const draft of next) {
     if (draft.status === "committed") continue;
     const problems = validateDraft(draft);
@@ -205,12 +225,26 @@ export async function commitDrafts(
       continue;
     }
     try {
+      const adopted = await findSavedAttempt(draft, client, groupId, claimedExpenseIds);
+      if (adopted !== null) {
+        markCommitted(draft, adopted, now);
+        claimedExpenseIds.add(adopted);
+        committed.push(draft);
+        continue;
+      }
+    } catch (error) {
+      failed.push({
+        draft,
+        reason: `I couldn't check whether an earlier try reached Splitwise (${error instanceof Error ? error.message : String(error)}), so I didn't resend it`,
+      });
+      continue;
+    }
+    draft.first_attempted_at ??= now;
+    try {
       const payload = draftToCreateExpensePayload(draft, groupId);
       const expenseId = await client.createExpense(payload);
-      draft.status = "committed";
-      draft.splitwise_expense_id = expenseId;
-      draft.committed_at = now;
-      draft.updated_at = now;
+      markCommitted(draft, expenseId, now);
+      claimedExpenseIds.add(expenseId);
       committed.push(draft);
       created.push(payload);
     } catch (error) {
@@ -218,6 +252,39 @@ export async function commitDrafts(
     }
   }
   return { drafts: next, committed, failed, created };
+}
+
+function markCommitted(draft: Draft, expenseId: number, now: string): void {
+  draft.status = "committed";
+  draft.splitwise_expense_id = expenseId;
+  draft.committed_at = now;
+  draft.updated_at = now;
+}
+
+/** The Expense an earlier uncertain create may have saved anyway; null when there is no prior attempt or no match. */
+async function findSavedAttempt(
+  draft: Draft,
+  client: { listExpenses(groupId: number, updatedAfter: string): Promise<ListedExpense[]> },
+  groupId: number,
+  claimedExpenseIds: Set<number>,
+): Promise<number | null> {
+  if (!draft.first_attempted_at) return null;
+  const since = new Date(Date.parse(draft.first_attempted_at) - ATTEMPT_CLOCK_SKEW_MS).toISOString();
+  const wanted = expenseKey(draft.description, draft.amount, draft.shares);
+  for (const expense of await client.listExpenses(groupId, since)) {
+    if (typeof expense.id !== "number" || claimedExpenseIds.has(expense.id) || expense.deleted_at) continue;
+    const found = expenseKey(expense.description ?? "", expense.cost ?? "", expense.users ?? []);
+    if (found === wanted) return expense.id;
+  }
+  return null;
+}
+
+function expenseKey(description: string, cost: string, shares: ListedShare[]): string {
+  const shareKey = shares
+    .map((share) => `${share.user_id}:${toCents(String(share.paid_share ?? ""))}:${toCents(String(share.owed_share ?? ""))}`)
+    .sort()
+    .join("|");
+  return `${description.trim()}|${toCents(cost)}|${shareKey}`;
 }
 
 /** Flattened create_expense body for one Draft; this is the only shape Commit sends. */

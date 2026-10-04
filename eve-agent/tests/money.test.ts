@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyDraftChanges, batchFingerprint, buildDraft, commitDrafts, describeDraft, draftToCreateExpensePayload, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
-import type { ExpenseInput, ExpensePayload, Group } from "../agent/lib/money.ts";
+import type { ExpenseInput, ExpensePayload, Group, ListedExpense } from "../agent/lib/money.ts";
 import { SplitwiseError } from "../agent/lib/splitwise.ts";
 
 const DEMO_USER = 100;
@@ -185,17 +185,41 @@ test("a Modification with an unknown Participant blocks the change", () => {
   );
 });
 
-function recordingClient(outcomes: Array<number | Error> = []) {
+function recordingClient(
+  outcomes: Array<number | Error> = [],
+  options: { expenses?: ListedExpense[]; listError?: Error } = {},
+) {
   const creates: ExpensePayload[] = [];
+  const lists: { groupId: number; updatedAfter: string }[] = [];
   let index = 0;
   return {
     creates,
+    lists,
     async createExpense(payload: ExpensePayload) {
       creates.push(payload);
       const outcome = outcomes[index++];
       if (outcome instanceof Error) throw outcome;
       return outcome ?? 9000 + creates.length;
     },
+    async listExpenses(groupId: number, updatedAfter: string) {
+      lists.push({ groupId, updatedAfter });
+      if (options.listError) throw options.listError;
+      return options.expenses ?? [];
+    },
+  };
+}
+
+function listed(source: ReturnType<typeof draft>, extra: { id: number; deleted_at?: string | null }): ListedExpense {
+  return {
+    id: extra.id,
+    description: source.description,
+    cost: source.amount,
+    deleted_at: extra.deleted_at ?? null,
+    users: source.shares.map((share) => ({
+      user_id: share.user_id,
+      paid_share: share.paid_share,
+      owed_share: share.owed_share,
+    })),
   };
 }
 
@@ -266,4 +290,58 @@ test("one rejected create does not block the rest of the batch", async () => {
   assert.equal(result.drafts[1].splitwise_expense_id, 9002);
   assert.match(result.failed[0].reason, /bad shares/);
   assert.equal(result.committed[0].description, "Tacos");
+});
+
+test("a retry after an uncertain create adopts the matching saved Expense and sends no second create", async () => {
+  const pizza = { ...draft({}), first_attempted_at: "2026-10-04T06:10:00.000Z" };
+  const client = recordingClient([], { expenses: [listed(pizza, { id: 51023 })] });
+
+  const result = await commitDrafts([pizza], client, 4242, "2026-10-04T06:15:00.000Z");
+
+  assert.deepEqual(client.creates, []);
+  assert.deepEqual(client.lists, [{ groupId: 4242, updatedAfter: "2026-10-04T06:05:00.000Z" }]);
+  assert.equal(result.drafts[0].status, "committed");
+  assert.equal(result.drafts[0].splitwise_expense_id, 51023);
+  assert.equal(result.drafts[0].committed_at, "2026-10-04T06:15:00.000Z");
+  assert.deepEqual(result.failed, []);
+});
+
+test("a deleted or already-mapped match is not adopted", async () => {
+  const pizza = { ...draft({}), first_attempted_at: "2026-10-04T06:10:00.000Z" };
+  const earlier = { ...draft({}), id: "d0", status: "committed" as const, splitwise_expense_id: 51023 };
+  const client = recordingClient([51025], {
+    expenses: [listed(pizza, { id: 51023 }), listed(pizza, { id: 51024, deleted_at: "2026-10-04T06:11:00.000Z" })],
+  });
+
+  const result = await commitDrafts([earlier, pizza], client, 4242, "2026-10-04T06:15:00.000Z");
+
+  assert.equal(client.creates.length, 1);
+  assert.equal(result.drafts[1].status, "committed");
+  assert.equal(result.drafts[1].splitwise_expense_id, 51025);
+  assert.notEqual(result.drafts[1].splitwise_expense_id, 51023);
+  assert.notEqual(result.drafts[1].splitwise_expense_id, 51024);
+});
+
+test("Commit records the first-attempt time before sending", async () => {
+  const pizza = draft({});
+  const client = recordingClient([new SplitwiseError("timeout")]);
+
+  const result = await commitDrafts([pizza], client, 4242, "2026-10-04T06:10:00.000Z");
+
+  assert.equal(result.drafts[0].first_attempted_at, "2026-10-04T06:10:00.000Z");
+  assert.equal(result.drafts[0].status, "draft");
+  assert.equal(client.lists.length, 0);
+});
+
+test("when the lookup read fails, the Draft is reported and not resent", async () => {
+  const pizza = { ...draft({}), first_attempted_at: "2026-10-04T06:10:00.000Z" };
+  const client = recordingClient([], { listError: new SplitwiseError("get_expenses failed (HTTP 503)") });
+
+  const result = await commitDrafts([pizza], client, 4242, "2026-10-04T06:15:00.000Z");
+
+  assert.deepEqual(client.creates, []);
+  assert.equal(result.drafts[0].status, "draft");
+  assert.deepEqual(result.committed, []);
+  assert.match(result.failed[0].reason, /couldn't check whether an earlier try reached Splitwise/);
+  assert.match(result.failed[0].reason, /get_expenses failed/);
 });

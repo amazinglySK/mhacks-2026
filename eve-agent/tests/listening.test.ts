@@ -39,6 +39,9 @@ function countingClient(options: { fail?: boolean; outcomes?: Array<number | Err
       if (outcome instanceof Error) throw outcome;
       return outcome ?? 9000 + creates.length;
     },
+    async listExpenses() {
+      return [];
+    },
   };
   return { client, calls, creates };
 }
