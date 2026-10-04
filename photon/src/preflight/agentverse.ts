@@ -10,7 +10,7 @@ const config = loadConfig();
 const link = await connectReasoningAgent(config);
 console.log("Almanac resolution and Photon mailbox access ok.");
 
-await link.send({ messageId: `preflight-${crypto.randomUUID()}`, sender: "preflight", text: "@agent preflight" });
+await link.send({ messageId: `preflight-${crypto.randomUUID()}`, sender: "preflight", text: "@splitty preflight" });
 console.log("SUBMIT ok. Waiting for the Reasoning Agent reply...");
 
 let reply: string | undefined;

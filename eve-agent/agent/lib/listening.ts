@@ -68,7 +68,7 @@ export function startListening(session: ListeningSession): Outcome {
   }
   return {
     session: { ...NO_SESSION, ...durable(session), status: "active" },
-    summary: "Listening Session started. Tell me about shared Expenses, then say @agent stop listening.",
+    summary: "Listening Session started. Tell me about shared Expenses, then say @splitty stop listening.",
   };
 }
 

@@ -205,7 +205,7 @@ await storage.save(draft)
 
 **Process Flow:**
 
-1. **User says:** "change the pizza to $35" (in-session or explicit `@agent correct` command)
+1. **User says:** "change the pizza to $35" (in-session or explicit `@splitty correct` command)
 2. **Agent finds draft:** Fuzzy-match description against committed drafts → gets `splitwise_expense_id`
 3. **Agent asks for clarification:** "What should I update? Amount, participants, or split?"
 4. **Agent recomputes shares:** If amount changes, recompute all `owed_share` values proportionally
@@ -256,7 +256,7 @@ def correction_to_update_payload(
 
 **Context-Dependent Invocation:**
 - **Inside session:** Natural language modification ("change that to $35") triggers immediate update
-- **Outside session:** Explicit command (`@agent correct pizza to $35`) required
+- **Outside session:** Explicit command (`@splitty correct pizza to $35`) required
 
 ---
 

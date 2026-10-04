@@ -130,8 +130,8 @@ class Chat:
 def test_start_listening_acknowledges_once_and_reports_duplicate_start():
     chat = Chat()
 
-    first = chat.say("@agent start listening")
-    second = chat.say("@agent start listening")
+    first = chat.say("@splitty start listening")
+    second = chat.say("@splitty start listening")
 
     assert "listening" in first.lower()
     assert "already" in second.lower()
@@ -147,7 +147,7 @@ def test_ordinary_message_outside_a_session_is_ignored():
 
 def test_complete_expense_in_session_becomes_a_draft_summary_without_writing():
     chat = Chat(PIZZA)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     reply = chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
 
@@ -158,7 +158,7 @@ def test_complete_expense_in_session_becomes_a_draft_summary_without_writing():
 
 def test_non_expense_chatter_in_session_stays_silent():
     chat = Chat()
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     assert chat.say("lol that movie was great") is None
     assert len(chat.asi.calls) == 1
@@ -166,60 +166,60 @@ def test_non_expense_chatter_in_session_stays_silent():
 
 def test_clarifying_question_from_asi_one_is_relayed_without_a_draft():
     chat = Chat(ToolCall("ask_user", {"question": "How much was the pizza?"}))
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     assert chat.say("I got pizza for Alex and me") == "How much was the pizza?"
-    assert "nothing to record" in chat.say("@agent stop listening").lower()
+    assert "nothing to record" in chat.say("@splitty stop listening").lower()
 
 
 @pytest.mark.parametrize("amount", [None, "", "abc", "0", "-5"])
 def test_missing_or_invalid_amount_is_asked_for_never_guessed(amount):
     call = ToolCall("record_expense", {"description": "Pizza", "amount": amount, "payer": "me", "participants": ["Alex"]})
     chat = Chat(call)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     reply = chat.say("I got pizza for Alex")
 
     assert "how much" in reply.lower()
-    assert "nothing to record" in chat.say("@agent stop listening").lower()
+    assert "nothing to record" in chat.say("@splitty stop listening").lower()
 
 
 def test_unknown_participant_blocks_the_draft():
     call = ToolCall("record_expense", {"description": "Pizza", "amount": "30", "payer": "me", "participants": ["Zed"]})
     chat = Chat(call)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     reply = chat.say("I paid $30 for pizza with Zed")
 
     assert "Zed" in reply and "MHacks Weekend" in reply
-    assert "nothing to record" in chat.say("@agent stop listening").lower()
+    assert "nothing to record" in chat.say("@splitty stop listening").lower()
 
 
 def test_ambiguous_first_name_blocks_the_draft_and_names_the_choices():
     call = ToolCall("record_expense", {"description": "Taxi", "amount": "20", "payer": "me", "participants": ["Sam"]})
     chat = Chat(call)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     reply = chat.say("I paid $20 for a taxi with Sam")
 
     assert "Sam Park" in reply and "Sam Ortiz" in reply
-    assert "nothing to record" in chat.say("@agent stop listening").lower()
+    assert "nothing to record" in chat.say("@splitty stop listening").lower()
 
 
 def test_participant_names_match_case_and_full_name_insensitively():
     call = ToolCall("record_expense", {"description": "Taxi", "amount": "20", "payer": "me", "participants": ["sam  PARK"]})
     chat = Chat(call)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     assert "Sam Park" in chat.say("I paid $20 for a taxi with sam park")
 
 
 def test_stop_returns_batch_summary_and_writes_nothing():
     chat = Chat(PIZZA)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
 
-    reply = chat.say("@agent stop listening")
+    reply = chat.say("@splitty stop listening")
 
     assert "Pizza" in reply and "$30.00" in reply and "commit" in reply.lower()
     assert chat.splitwise.creates == []
@@ -227,22 +227,22 @@ def test_stop_returns_batch_summary_and_writes_nothing():
 
 def test_stopped_session_ignores_modification_and_non_confirming_reply():
     chat = Chat(PIZZA, ToolCall("record_expense", {**PIZZA.arguments, "description": "Tacos"}))
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
 
     assert chat.say("I also paid $30 for tacos with Alex and Maya") is None
     assert chat.say("sounds good") is None
-    assert "commit" in chat.say("@agent did you get that?").lower()
+    assert "commit" in chat.say("@splitty did you get that?").lower()
     assert chat.splitwise.creates == []
     assert len(chat.asi.calls) == 1
 
 
 def test_commit_creates_one_expense_with_complete_by_shares_data():
     chat = Chat(PIZZA)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
 
     reply = chat.say("commit")
 
@@ -269,21 +269,21 @@ def test_commit_creates_one_expense_with_complete_by_shares_data():
 
 def test_commit_after_success_ends_the_session_without_another_write():
     chat = Chat(PIZZA)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
     chat.say("commit")
 
     assert chat.say("commit") is None
     assert len(chat.splitwise.creates) == 1
-    assert "listening" in chat.say("@agent start listening").lower()
+    assert "listening" in chat.say("@splitty start listening").lower()
 
 
 def test_equal_split_remainder_goes_to_the_payers_owed_share():
     chat = Chat(ToolCall("record_expense", {"description": "Snacks", "amount": "10", "payer": "me", "participants": ["Alex", "Maya"]}))
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $10 for snacks with Alex and Maya")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
     chat.say("commit")
 
     payload = chat.splitwise.creates[0]
@@ -292,9 +292,9 @@ def test_equal_split_remainder_goes_to_the_payers_owed_share():
 
 def test_named_payer_pays_and_the_sender_is_a_participant():
     chat = Chat(ToolCall("record_expense", {"description": "Gas", "amount": "20", "payer": "Alex", "participants": ["me"]}))
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("Alex paid $20 for gas for me")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
     chat.say("commit")
 
     payload = chat.splitwise.creates[0]
@@ -304,9 +304,9 @@ def test_named_payer_pays_and_the_sender_is_a_participant():
 
 def test_stopping_an_empty_session_never_contacts_splitwise():
     chat = Chat()
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
-    reply = chat.say("@agent stop listening")
+    reply = chat.say("@splitty stop listening")
 
     assert "nothing to record" in reply.lower()
     assert chat.splitwise.reads == [] and chat.splitwise.creates == []
@@ -315,51 +315,51 @@ def test_stopping_an_empty_session_never_contacts_splitwise():
 
 def test_failed_commit_is_reported_and_stays_uncommitted():
     chat = Chat(PIZZA, splitwise=FakeSplitwise(create_error=SplitwiseError("create_expense rejected: bad shares")))
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
 
     reply = chat.say("commit")
 
     assert "Pizza" in reply and "bad shares" in reply
-    assert "commit" in chat.say("@agent hmm").lower()
+    assert "commit" in chat.say("@splitty hmm").lower()
 
 
 def test_stop_that_cannot_read_splitwise_keeps_listening_so_stop_can_be_retried():
     chat = Chat(PIZZA)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
     chat.splitwise.read_error = SplitwiseError("get_group failed (HTTP 503)")
 
-    assert "HTTP 503" in chat.say("@agent stop listening")
+    assert "HTTP 503" in chat.say("@splitty stop listening")
 
     chat.splitwise.read_error = None
-    assert "Pizza" in chat.say("@agent stop listening")
+    assert "Pizza" in chat.say("@splitty stop listening")
 
 
 def test_commands_must_be_the_whole_message():
     chat = Chat()
-    chat.say("@agent start listening!")
+    chat.say("@splitty start listening!")
 
-    assert chat.say("don't @agent stop listening yet") is None
-    assert "already" in chat.say("@agent start listening").lower()
+    assert chat.say("don't @splitty stop listening yet") is None
+    assert "already" in chat.say("@splitty start listening").lower()
 
 
 def test_amount_too_small_to_split_is_rejected_before_it_becomes_a_draft():
     call = ToolCall("record_expense", {"description": "Gum", "amount": "0.03", "payer": "me", "participants": ["Alex", "Maya", "Sam Park", "Sam Ortiz"]})
     chat = Chat(call)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
 
     assert "can't split" in chat.say("I paid 3 cents for gum with everyone")
-    assert "nothing to record" in chat.say("@agent stop listening").lower()
+    assert "nothing to record" in chat.say("@splitty stop listening").lower()
 
 
 def stopped_batch(*calls, splitwise=None):
     chat = Chat(*calls, splitwise=splitwise)
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     for _ in calls:
         chat.say("I paid for something with Alex")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
     return chat
 
 
@@ -501,9 +501,9 @@ def test_old_commit_redelivered_into_a_later_batch_does_not_confirm_it():
     chat.say("commit")
     old_commit = chat.last_message_id
     chat.asi.tool_calls = [PIZZA]
-    chat.say("@agent start listening")
+    chat.say("@splitty start listening")
     chat.say("I paid $30 for pizza with Alex and Maya, split equally.")
-    chat.say("@agent stop listening")
+    chat.say("@splitty stop listening")
 
     assert chat.say("commit", message_id=old_commit) is None
     assert len(chat.splitwise.creates) == 2

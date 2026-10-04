@@ -1,9 +1,9 @@
 import type { EveEvalContext, EveEvalToolCall } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 
-export const START = "@agent start listening";
-export const STOP = "@agent stop listening";
-export const REVIEW = "what do you got @agent?";
+export const START = "@splitty start listening";
+export const STOP = "@splitty stop listening";
+export const REVIEW = "what do you got @splitty?";
 export const PIZZA = "I paid $30 for pizza with Alex and Maya, split equally.";
 export const CHANGE_PIZZA = "Actually make the pizza $36.";
 export const GAS = "I paid $20 for gas with Alex, split equally.";

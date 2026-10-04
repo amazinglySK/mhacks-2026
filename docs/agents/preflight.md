@@ -19,12 +19,12 @@ Run each from `photon/`. A preflight passes only when it prints `PASSED`.
 | Agentverse mailbox round trip | `bun run preflight:agentverse` | Photon's signed envelope reaches the hosted Reasoning Agent and a reply returns to Photon's mailbox. |
 | Splitwise group read | (same run as above) | The reply is `PREFLIGHT OK group="MHacks Weekend" …`, which the Reasoning Agent sends only after reading the group with its Agentverse secrets, finding the demo user among its members, and getting an ASI:One completion. |
 
-Then run `bun run start`, send `@agent hello` from the demo DM, and expect a visible reply naming the group. A message from any other DM logs `message_rejected` with reason `other_space` and is never forwarded.
+Then run `bun run start`, send `@splitty hello` from the demo DM, and expect a visible reply naming the group. A message from any other DM logs `message_rejected` with reason `other_space` and is never forwarded.
 
 ## Record
 
 Fill in after each run. Do not paste secrets, phone numbers, DM IDs, or Splitwise IDs here.
 
-| Date | Photon send/receive | Agentverse round trip | Splitwise group read | End-to-end `@agent` reply | Other-DM rejected | Notes |
+| Date | Photon send/receive | Agentverse round trip | Splitwise group read | End-to-end `@splitty` reply | Other-DM rejected | Notes |
 |---|---|---|---|---|---|---|
-| 2026-10-04 | passed | passed | passed (group "MHacks Weekend") | passed | passed | Without `@agent`, a DM message is forwarded and the agent logs `chat_ignored`. A non-text event right after a reply is rejected as `not_text`. |
+| 2026-10-04 | passed | passed | passed (group "MHacks Weekend") | passed | passed | Without `@splitty`, a DM message is forwarded and the agent logs `chat_ignored`. A non-text event right after a reply is rejected as `not_text`. |

@@ -66,20 +66,20 @@ def settings():
 def test_mentioned_dm_message_reads_group_and_replies_with_asi_one():
     splitwise, asi = FakeSplitwise(), FakeAsi()
 
-    reply = respond_to_chat(**dm("@agent hello"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
+    reply = respond_to_chat(**dm("@splitty hello"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
 
     assert reply == "Hi! I can see MHacks Weekend."
     assert splitwise.calls == [4242]
     prompt = "\n".join(m["content"] for m in asi.calls[0])
     assert "MHacks Weekend" in prompt
     assert "Alex" in prompt and "Maya" in prompt
-    assert asi.calls[0][-1] == {"role": "user", "content": "@agent hello"}
+    assert asi.calls[0][-1] == {"role": "user", "content": "@splitty hello"}
 
 
 def test_preflight_confirms_group_read_and_asi_one_in_a_checkable_reply():
     splitwise, asi = FakeSplitwise(), FakeAsi()
 
-    reply = respond_to_chat(**dm("@agent preflight"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
+    reply = respond_to_chat(**dm("@splitty preflight"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
 
     assert reply == 'PREFLIGHT OK group="MHacks Weekend" demo_user_member=yes asi1=yes'
     assert splitwise.calls == [4242] and len(asi.calls) == 1
@@ -87,7 +87,7 @@ def test_preflight_confirms_group_read_and_asi_one_in_a_checkable_reply():
 
 def test_preflight_reports_failure_when_splitwise_is_unreadable():
     reply = respond_to_chat(
-        **dm("@agent preflight"),
+        **dm("@splitty preflight"),
         settings=settings(),
         splitwise=FakeSplitwise(error=SplitwiseError("nope")),
         asi=FakeAsi(),
@@ -107,7 +107,7 @@ def test_dm_message_without_mention_is_ignored():
 def test_chat_from_another_agent_never_touches_the_demo_group():
     splitwise, asi = FakeSplitwise(), FakeAsi()
 
-    reply = respond_to_chat(**dm("@agent hello", sender="agent1qstranger"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
+    reply = respond_to_chat(**dm("@splitty hello", sender="agent1qstranger"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
 
     assert reply is not None and "iMessage" in reply
     assert splitwise.calls == [] and asi.calls == []
@@ -116,7 +116,7 @@ def test_chat_from_another_agent_never_touches_the_demo_group():
 def test_splitwise_failure_is_reported_without_calling_asi_one():
     splitwise, asi = FakeSplitwise(error=SplitwiseError("Invalid API request")), FakeAsi()
 
-    reply = respond_to_chat(**dm("@agent hello"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
+    reply = respond_to_chat(**dm("@splitty hello"), settings=settings(), splitwise=splitwise, asi=asi, storage=FakeStorage())
 
     assert "Splitwise" in reply
     assert asi.calls == []
@@ -125,7 +125,7 @@ def test_splitwise_failure_is_reported_without_calling_asi_one():
 def test_splitwise_failure_reply_names_the_http_status():
     splitwise = FakeSplitwise(error=SplitwiseError("get_group failed (HTTP 401)"))
 
-    reply = respond_to_chat(**dm("@agent preflight"), settings=settings(), splitwise=splitwise, asi=FakeAsi(), storage=FakeStorage())
+    reply = respond_to_chat(**dm("@splitty preflight"), settings=settings(), splitwise=splitwise, asi=FakeAsi(), storage=FakeStorage())
 
     assert "HTTP 401" in reply
 
@@ -134,7 +134,7 @@ def test_demo_user_missing_from_group_is_reported():
     group = {**GROUP, "members": GROUP["members"][1:]}
     asi = FakeAsi()
 
-    reply = respond_to_chat(**dm("@agent hello"), settings=settings(), splitwise=FakeSplitwise(group), asi=asi, storage=FakeStorage())
+    reply = respond_to_chat(**dm("@splitty hello"), settings=settings(), splitwise=FakeSplitwise(group), asi=asi, storage=FakeStorage())
 
     assert "not a member" in reply
     assert asi.calls == []

@@ -12,10 +12,10 @@ import requests
 
 SPLITWISE_API = "https://secure.splitwise.com/api/v3.0"
 ASI1_MODEL = "asi1"
-MENTION = "@agent"
-PREFLIGHT_COMMAND = "@agent preflight"
-START_COMMAND = "@agent start listening"
-STOP_COMMAND = "@agent stop listening"
+MENTION = "@splitty"
+PREFLIGHT_COMMAND = "@splitty preflight"
+START_COMMAND = "@splitty start listening"
+STOP_COMMAND = "@splitty stop listening"
 COMMIT_COMMAND = "commit"
 HTTP_TIMEOUT_SECONDS = 20
 
@@ -258,16 +258,16 @@ def respond_to_chat(
 
 def _start(session: dict | None, storage: Storage) -> str:
     if session is not None and session["status"] == "active":
-        return "A Listening Session is already active. Tell me about shared Expenses, then say @agent stop listening."
+        return "A Listening Session is already active. Tell me about shared Expenses, then say @splitty stop listening."
     if session is not None:
         return AWAITING_COMMIT_REPLY
     storage.set(SESSION_KEY, {"status": "active", "transcript": [], "drafts": []})
-    return "Listening Session started. Tell me about shared Expenses and I'll keep Drafts until you say @agent stop listening."
+    return "Listening Session started. Tell me about shared Expenses and I'll keep Drafts until you say @splitty stop listening."
 
 
 def _stop(session: dict | None, settings: Settings, splitwise: SplitwiseService, storage: Storage) -> str:
     if session is None:
-        return "No Listening Session is active. Say @agent start listening to begin."
+        return "No Listening Session is active. Say @splitty start listening to begin."
     if session["status"] == "stopped":
         return AWAITING_COMMIT_REPLY
     if not _uncommitted(session):

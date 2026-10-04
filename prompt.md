@@ -35,7 +35,7 @@ Side finding: duplicate iMessage replies earlier were caused by **three Photon r
 4. **iMessage: Eve's first-class Photon channel** (`eve add channel/photon-imessage`, `photonIMessageChannel` from `eve/channels/photon`, webhook route `/eve/v1/photon`, one Eve session per iMessage conversation).
 5. **Hosting: Vercel with Vercel Connect** (option a). Reuse the existing Photon project and line, and **stop the old Bun runtime** once the webhook points at Eve, or both will answer.
 6. **Turn policy: `turnPolicy: "queue"`.** Every message is handled to completion, in order, so no Expense message is dropped or interrupted by steering.
-7. **No rigid commands.** The user does not want fixed command strings like `@agent start listening`. Start, stop, summary and reset should be understood from natural language through tools.
+7. **No rigid commands.** The user does not want fixed command strings like `@splitty start listening`. Start, stop, summary and reset should be understood from natural language through tools.
 8. **State and reset: Eve durable state** for the single DM session holds the Listening Session, Drafts, committed Splitwise Expense IDs, and handled confirmation message IDs. Photon restart no longer exists as a reset path, so #21's reset becomes a natural-language reset tool that clears the active session and uncommitted Drafts and **keeps** committed mappings. This also gives a way out of a stuck stopped batch.
 9. **Agentverse: a discovery-only side entry point**, not on the iMessage demo path. The iMessage demo runs Photon → Eve directly.
 10. **Build order (about 4 hours):**

@@ -23,19 +23,31 @@ A member of the mapped Splitwise group who pays or owes a share of an Expense. P
 _Avoid_: Chat member, iMessage participant
 
 **Listening Session**:
-A stateful period scoped to the configured DM with two states: `active` (agent listening, creating/modifying drafts) and `stopped` (session ended). Created by "@agent start listening" and ended by "@agent stop listening" by the demo user. State lives in the Reasoning Agent; restarting the Photon Runtime discards the active session and uncommitted Drafts while preserving committed Expense mappings.
+A stateful period scoped to the configured DM with three states: `none` (no session), `active` (agent listening, creating/modifying drafts), and `stopped` (session ended, batch under review). Created by "@splitty start listening" and ended by "@splitty stop listening" by the demo user. State lives in the Reasoning Agent; restarting the Photon Runtime discards the active session and uncommitted Drafts while preserving committed Expense mappings.
 _Avoid_: Monitoring, recording mode, stretch
+
+**Tapback**:
+An iMessage reaction the agent applies to an inbound message while a Listening Session is `active` or `stopped`, to show it heard the message. A Tapback does not confirm a Draft and does not Commit.
+_Avoid_: Reaction (conversational banter), confirmation, like
 
 **Draft**:
 Structured expense data (amount, payer, participants, split rule) recorded by the Reasoning Agent during an active session, stored in Agent Storage. Exists in one of two states: `draft` (created and modifiable) or `committed` (written to Splitwise). Drafts have no explicit per-item confirmation; user may modify any draft via natural language during the session. All drafts commit together as a batch when the session stops, after one final confirmation.
 _Avoid_: Pending expense, proposal, unconfirmed expense
 
 **Commit**:
-The batch operation that writes all drafts from a session to Splitwise when the user stops listening. Triggered by final user confirmation on a Photon app card. Best-effort: drafts that succeed are written and marked `committed`; drafts that fail (Splitwise API error) are reported to the user with retry option. Stores Splitwise expense IDs in Agent Storage for later corrections.
+The batch operation that writes all drafts from a session to Splitwise when the user stops listening. Triggered by the first valid Commit decision on the final Batch Review. Best-effort: drafts that succeed are written and marked `committed`; drafts that fail (Splitwise API error) are reported to the user with retry option. Stores Splitwise expense IDs in Agent Storage for later corrections.
 _Avoid_: Save, sync, push
 
+**Decline**:
+The decision that rejects a stopped session's remaining uncommitted Drafts without writing them to Splitwise, then ends the Listening Session. Already-committed Expenses and their stored mappings remain unchanged.
+_Avoid_: Cancel (ambiguous with stopping a Listening Session), reset
+
+**Batch Review**:
+The final presentation of a stopped session's Drafts, consisting of a summary card and Commit/Decline controls. The first valid decision is final; later selections and unselections have no effect.
+_Avoid_: Confirmation card, summary widget
+
 **Correction**:
-Updating an already-committed expense in Splitwise via `update_expense` API. Context-dependent: inside a session, natural language like "change that pizza to $35" triggers immediate Splitwise update; outside a session, explicit command "@agent correct pizza to $35" required. Agent looks up Splitwise expense ID from stored mapping by description.
+Updating an already-committed expense in Splitwise via `update_expense` API. Context-dependent: inside a session, natural language like "change that pizza to $35" triggers immediate Splitwise update; outside a session, explicit command "@splitty correct pizza to $35" required. Agent looks up Splitwise expense ID from stored mapping by description.
 _Avoid_: Edit, fix, modification (use Modification for in-session draft changes)
 
 **Modification**:

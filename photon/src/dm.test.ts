@@ -10,7 +10,7 @@ function message(overrides: Partial<InboundLike> = {}): InboundLike {
     direction: "inbound",
     space: { id: DEMO_DM },
     sender: { id: "+15550000000" },
-    content: { type: "text", text: "@agent hello" },
+    content: { type: "text", text: "@splitty hello" },
     ...overrides,
   };
 }
@@ -19,7 +19,7 @@ describe("reduceInbound", () => {
   test("reduces a text message from the configured DM to the minimal envelope", () => {
     expect(reduceInbound(message(), DEMO_DM)).toEqual({
       ok: true,
-      message: { messageId: "msg-1", sender: "+15550000000", text: "@agent hello" },
+      message: { messageId: "msg-1", sender: "+15550000000", text: "@splitty hello" },
     });
   });
 

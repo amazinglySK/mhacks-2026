@@ -53,7 +53,7 @@ The agent creates drafts by parsing messages like "I paid $30 for pizza." The qu
 ### Mitigations
 
 - Agent sends a summary message after creating each draft: "Recorded: Pizza $30, Alice paid, split 3 ways." This gives immediate feedback even without requiring confirmation.
-- "what do you got @agent?" command lets users check drafts mid-session.
+- "what do you got @splitty?" command lets users check drafts mid-session.
 - Users can modify drafts anytime during the session via natural language.
 - Final confirmation card shows all drafts with full details before commit.
 

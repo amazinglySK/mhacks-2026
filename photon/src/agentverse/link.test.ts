@@ -98,7 +98,7 @@ describe("ReasoningAgentLink", () => {
   test("send submits a signed chat message carrying only the minimal envelope", async () => {
     const l = link();
     await l.connect();
-    await l.send({ messageId: "msg-1", sender: "+15550000000", text: "@agent hello" });
+    await l.send({ messageId: "msg-1", sender: "+15550000000", text: "@splitty hello" });
 
     const submit = calls.find((c) => c.url === HOSTED_ENDPOINT)!;
     const envelope = submit.body as Envelope;
@@ -110,7 +110,7 @@ describe("ReasoningAgentLink", () => {
     const chat = decodePayload(envelope) as { content: unknown[] };
     expect(chat.content).toEqual([
       { type: "metadata", metadata: { kind: "dm_message", message_id: "msg-1", sender: "+15550000000" } },
-      { type: "text", text: "@agent hello" },
+      { type: "text", text: "@splitty hello" },
     ]);
   });
 
