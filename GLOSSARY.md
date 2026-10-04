@@ -1,6 +1,6 @@
 # Shared-Money Agent
 
-A conversational agent in iMessage group chats that turns talk about shared spending into records in Splitwise, which remains the system of record.
+A conversational agent in an iMessage DM that turns talk about shared spending into records in Splitwise, which remains the system of record.
 
 ## Language
 
@@ -18,8 +18,12 @@ _Avoid_: Payback, debt payment
 The net amount owed between people, derived by Splitwise from expenses and settlements; never computed by us.
 _Avoid_: Debt, debt graph, total owed
 
+**Participant**:
+A member of the mapped Splitwise group who pays or owes a share of an Expense. Participants are referenced by name in the DM; they are not iMessage conversation members.
+_Avoid_: Chat member, iMessage participant
+
 **Listening Session**:
-A stateful period scoped to a group chat with two states: `active` (agent listening, creating/modifying drafts) and `stopped` (session ended). Created by "@agent start listening", ended by "@agent stop listening". Anyone in the group can start, stop, or modify any draft. State lives in the Reasoning Agent (Agent Storage) and includes all drafts and their Splitwise expense ID mappings.
+A stateful period scoped to the configured DM with two states: `active` (agent listening, creating/modifying drafts) and `stopped` (session ended). Created by "@agent start listening" and ended by "@agent stop listening" by the demo user. State lives in the Reasoning Agent; restarting the Photon Runtime discards the active session and uncommitted Drafts while preserving committed Expense mappings.
 _Avoid_: Monitoring, recording mode, stretch
 
 **Draft**:
@@ -45,11 +49,11 @@ _Avoid_: Bill photo, scan
 ### Components
 
 **Photon Runtime**:
-The TypeScript process using `@spectrum-ts/imessage` SDK that receives iMessage events from group chats and forwards them to the Reasoning Agent via Agentverse mailbox REST API.
+The TypeScript process using `@spectrum-ts/imessage` SDK that receives iMessage events from the configured DM and forwards them to the Reasoning Agent via Agentverse mailbox REST API.
 _Avoid_: Photon app, iMessage client
 
 **Reasoning Agent**:
-The Python uAgent code hosted on Agentverse that parses messages, manages listening sessions and drafts, calls Splitwise API, and replies to the group via Photon; includes the agent's mailbox and Agent Storage.
+The Python uAgent code hosted on Agentverse that parses messages, manages listening sessions and drafts, calls Splitwise API, and replies to the DM via Photon; includes the agent's mailbox and Agent Storage.
 _Avoid_: Fetch agent, backend, agent code
 
 **Splitwise**:
