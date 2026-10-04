@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyDraftChanges, batchFingerprint, buildDraft, describeDraft, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
-import type { ExpenseInput, Group } from "../agent/lib/money.ts";
+import { applyDraftChanges, batchFingerprint, buildDraft, commitDrafts, describeDraft, draftToCreateExpensePayload, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
+import type { ExpenseInput, ExpensePayload, Group } from "../agent/lib/money.ts";
+import { SplitwiseError } from "../agent/lib/splitwise.ts";
 
 const DEMO_USER = 100;
 const GROUP: Group = {
@@ -182,4 +183,87 @@ test("a Modification with an unknown Participant blocks the change", () => {
       }),
     (error) => error instanceof DraftError && /Zed is not in MHacks Weekend/.test(error.message),
   );
+});
+
+function recordingClient(outcomes: Array<number | Error> = []) {
+  const creates: ExpensePayload[] = [];
+  let index = 0;
+  return {
+    creates,
+    async createExpense(payload: ExpensePayload) {
+      creates.push(payload);
+      const outcome = outcomes[index++];
+      if (outcome instanceof Error) throw outcome;
+      return outcome ?? 9000 + creates.length;
+    },
+  };
+}
+
+test("a Draft flattens to Splitwise by-shares create fields", () => {
+  assert.deepEqual(draftToCreateExpensePayload(draft({}), 4242), {
+    group_id: 4242,
+    cost: "30.00",
+    description: "Pizza",
+    currency_code: "USD",
+    users__0__user_id: 100,
+    users__0__paid_share: "30.00",
+    users__0__owed_share: "10.00",
+    users__1__user_id: 101,
+    users__1__paid_share: "0.00",
+    users__1__owed_share: "10.00",
+    users__2__user_id: 102,
+    users__2__paid_share: "0.00",
+    users__2__owed_share: "10.00",
+  });
+});
+
+test("Commit skips a committed Draft and never sends it again", async () => {
+  const pizza = { ...draft({}), status: "committed" as const, splitwise_expense_id: 51023 };
+  const client = recordingClient();
+
+  const result = await commitDrafts([pizza], client, 4242, "2026-10-04T06:10:00.000Z");
+
+  assert.deepEqual(client.creates, []);
+  assert.equal(result.drafts[0].status, "committed");
+  assert.equal(result.drafts[0].splitwise_expense_id, 51023);
+  assert.deepEqual(result.committed, []);
+  assert.deepEqual(result.failed, []);
+});
+
+test("an invalid Draft is never sent and does not block the others", async () => {
+  const pizza = draft({});
+  pizza.shares[1] = { ...pizza.shares[1], owed_share: "-10.00" };
+  const tacos = draft({ description: "Tacos", amount: "20", participants: ["Alex"] });
+  tacos.id = "d2";
+  const client = recordingClient();
+
+  const result = await commitDrafts([pizza, tacos], client, 4242, "2026-10-04T06:10:00.000Z");
+
+  assert.deepEqual(
+    client.creates.map((payload) => payload.description),
+    ["Tacos"],
+  );
+  assert.equal(result.drafts[0].status, "draft");
+  assert.equal(result.drafts[1].status, "committed");
+  assert.equal(result.drafts[1].splitwise_expense_id, 9001);
+  assert.match(result.failed[0].reason, /negative/);
+});
+
+test("one rejected create does not block the rest of the batch", async () => {
+  const pizza = draft({});
+  const tacos = draft({ description: "Tacos", amount: "20", participants: ["Alex"] });
+  tacos.id = "d2";
+  const client = recordingClient([new SplitwiseError("create_expense rejected: bad shares"), 9002]);
+
+  const result = await commitDrafts([pizza, tacos], client, 4242, "2026-10-04T06:10:00.000Z");
+
+  assert.deepEqual(
+    client.creates.map((payload) => payload.description),
+    ["Pizza", "Tacos"],
+  );
+  assert.equal(result.drafts[0].status, "draft");
+  assert.equal(result.drafts[1].status, "committed");
+  assert.equal(result.drafts[1].splitwise_expense_id, 9002);
+  assert.match(result.failed[0].reason, /bad shares/);
+  assert.equal(result.committed[0].description, "Tacos");
 });

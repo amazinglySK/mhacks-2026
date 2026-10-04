@@ -1,5 +1,6 @@
-// Pure money logic, ported from reasoning-agent/shared_money.py. Amounts are integer cents
+// Money logic, ported from reasoning-agent/shared_money.py. Amounts are integer cents
 // internally and two-decimal strings at the edges, so no float rounding reaches Splitwise.
+// Share math is pure; Commit is the one function that calls Splitwise.
 
 import { createHash } from "node:crypto";
 
@@ -166,6 +167,73 @@ export function applyDraftChanges(
     created_at: draft.created_at,
     source_messages: [...draft.source_messages, meta.source],
   };
+}
+
+/** Splitwise by-shares create body: group, cost, description, currency, and flattened users__N__* shares. */
+export type ExpensePayload = {
+  group_id: number;
+  cost: string;
+  description: string;
+  currency_code: string;
+  [field: string]: string | number;
+};
+
+/** Best-effort Commit of these Drafts: skip committed, validate, create, mark each success immediately. */
+export type CommitDraftsResult = {
+  drafts: Draft[];
+  committed: Draft[];
+  failed: { draft: Draft; reason: string }[];
+  created: ExpensePayload[];
+};
+
+/** Writes uncommitted valid Drafts through `createExpense`; a later failure never unmarks an earlier success. */
+export async function commitDrafts(
+  drafts: Draft[],
+  client: { createExpense(payload: ExpensePayload): Promise<number> },
+  groupId: number,
+  now: string,
+): Promise<CommitDraftsResult> {
+  const next = drafts.map((draft) => ({ ...draft, shares: draft.shares.map((share) => ({ ...share })) }));
+  const committed: Draft[] = [];
+  const failed: { draft: Draft; reason: string }[] = [];
+  const created: ExpensePayload[] = [];
+  for (const draft of next) {
+    if (draft.status === "committed") continue;
+    const problems = validateDraft(draft);
+    if (problems.length > 0) {
+      failed.push({ draft, reason: problems.join("; ") });
+      continue;
+    }
+    try {
+      const payload = draftToCreateExpensePayload(draft, groupId);
+      const expenseId = await client.createExpense(payload);
+      draft.status = "committed";
+      draft.splitwise_expense_id = expenseId;
+      draft.committed_at = now;
+      draft.updated_at = now;
+      committed.push(draft);
+      created.push(payload);
+    } catch (error) {
+      failed.push({ draft, reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { drafts: next, committed, failed, created };
+}
+
+/** Flattened create_expense body for one Draft; this is the only shape Commit sends. */
+export function draftToCreateExpensePayload(draft: Draft, groupId: number): ExpensePayload {
+  const payload: ExpensePayload = {
+    group_id: groupId,
+    cost: draft.amount,
+    description: draft.description,
+    currency_code: draft.currency_code,
+  };
+  draft.shares.forEach((share, index) => {
+    payload[`users__${index}__user_id`] = share.user_id;
+    payload[`users__${index}__paid_share`] = share.paid_share;
+    payload[`users__${index}__owed_share`] = share.owed_share;
+  });
+  return payload;
 }
 
 /** Identifies exactly what Commit would send for these Drafts, so a confirmed batch can be matched to the one shown. */

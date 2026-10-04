@@ -1,8 +1,9 @@
 // The Listening Session lifecycle: none -> active -> stopped. Pure over the session value, so
-// tools only persist what these functions return, and Splitwise is read only when a batch is shown.
+// tools only persist what these functions return. Splitwise is read when a batch is shown, and
+// written only by commitBatch.
 
-import { batchFingerprint, describeDraft, DraftError } from "./money.ts";
-import type { Draft, Group } from "./money.ts";
+import { batchFingerprint, commitDrafts, describeDraft, DraftError } from "./money.ts";
+import type { CommitDraftsResult, Draft, ExpensePayload, Group } from "./money.ts";
 import type { SplitwiseClient } from "./splitwise.ts";
 
 export type ListeningSession = {
@@ -10,12 +11,21 @@ export type ListeningSession = {
   drafts: Draft[];
   /** The batch fingerprint last shown to the user after stopping; Commit must match it. */
   shown_fingerprint: string | null;
+  /** Confirmation message IDs already acted on, so a redelivered webhook never writes twice. */
+  handled_confirmation_ids: string[];
 };
 
 /** A new session value and the exact text the agent quotes. */
-export type Outcome = { session: ListeningSession; summary: string };
+export type Outcome = { session: ListeningSession; summary: string; created?: ExpensePayload[] };
 
-export const NO_SESSION: ListeningSession = { status: "none", drafts: [], shown_fingerprint: null };
+export const NO_SESSION: ListeningSession = {
+  status: "none",
+  drafts: [],
+  shown_fingerprint: null,
+  handled_confirmation_ids: [],
+};
+
+const HANDLED_CONFIRMATIONS_LIMIT = 50;
 
 const NOTHING_WRITTEN = "Nothing has been written to Splitwise.";
 
@@ -27,7 +37,7 @@ export function startListening(session: ListeningSession): Outcome {
     return { session, summary: `This Listening Session is stopped and can't be resumed. Its ${count(session.drafts)} wait for review.` };
   }
   return {
-    session: { ...NO_SESSION, status: "active" },
+    session: { ...NO_SESSION, status: "active", handled_confirmation_ids: session.handled_confirmation_ids },
     summary: "Listening Session started. Tell me about shared Expenses, then say @agent stop listening.",
   };
 }
@@ -68,7 +78,10 @@ export async function stopListening(session: ListeningSession, client: Splitwise
   if (session.status === "none") return { session, summary: "No Listening Session is active." };
   if (session.status === "stopped") return summarizeSession(session, client);
   if (session.drafts.length === 0) {
-    return { session: NO_SESSION, summary: "Stopped listening. There were no Drafts, so there is nothing to record in Splitwise." };
+    return {
+      session: { ...NO_SESSION, handled_confirmation_ids: session.handled_confirmation_ids },
+      summary: "Stopped listening. There were no Drafts, so there is nothing to record in Splitwise.",
+    };
   }
   // Read the group before changing state, so a failed read leaves the session active for a retry.
   const group = await client.getGroup();
@@ -87,6 +100,67 @@ export async function summarizeSession(session: ListeningSession, client: Splitw
     session: { ...session, shown_fingerprint: batchFingerprint(session.drafts) },
     summary: `Stopped. ${batch(session.drafts, group)}\n${NOTHING_WRITTEN}`,
   };
+}
+
+/** Writes the reviewed batch to Splitwise. Refuses unless stopped, shown, and this confirmation is new. */
+export async function commitBatch(
+  session: ListeningSession,
+  messageId: string,
+  client: SplitwiseClient,
+  now: string,
+): Promise<Outcome> {
+  if (messageId && session.handled_confirmation_ids.includes(messageId)) {
+    return { session, summary: "This confirmation was already handled. Nothing was written to Splitwise.", created: [] };
+  }
+  if (session.status !== "stopped") {
+    return {
+      session,
+      summary: "The Listening Session isn't stopped, so nothing was written to Splitwise. Stop listening first so the batch can be reviewed.",
+      created: [],
+    };
+  }
+  const uncommitted = session.drafts.filter((draft) => draft.status !== "committed");
+  if (uncommitted.length === 0) {
+    return { session, summary: "Those Drafts are already in Splitwise. Nothing was written.", created: [] };
+  }
+  if (session.shown_fingerprint !== batchFingerprint(session.drafts)) {
+    return {
+      session,
+      summary: "The batch has changed since it was shown, so nothing was written to Splitwise. Ask to review it again.",
+      created: [],
+    };
+  }
+
+  const group = await client.getGroup();
+  const handled = messageId
+    ? [...session.handled_confirmation_ids, messageId].slice(-HANDLED_CONFIRMATIONS_LIMIT)
+    : session.handled_confirmation_ids;
+  const result = await commitDrafts(session.drafts, client, group.id, now);
+  return {
+    session: {
+      ...session,
+      drafts: result.drafts,
+      handled_confirmation_ids: handled,
+      shown_fingerprint: batchFingerprint(result.drafts),
+    },
+    summary: commitSummary(result, group.name),
+    created: result.created,
+  };
+}
+
+function commitSummary(result: CommitDraftsResult, groupName: string): string {
+  const lines: string[] = [];
+  if (result.committed.length > 0) {
+    const names = result.committed.map((draft) => `${draft.description} $${draft.amount}`).join(", ");
+    lines.push(`Committed to Splitwise in ${groupName}: ${names}. Open Splitwise to see it.`);
+  }
+  for (const { draft, reason } of result.failed) {
+    lines.push(`Couldn't record ${draft.description} $${draft.amount}: ${reason}.`);
+  }
+  if (result.failed.length > 0) {
+    lines.push("Those Drafts are still uncommitted. Reply commit to retry.");
+  }
+  return lines.join("\n");
 }
 
 function batch(drafts: Draft[], group: Group): string {

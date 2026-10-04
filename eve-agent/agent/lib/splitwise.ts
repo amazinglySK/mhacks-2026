@@ -1,10 +1,12 @@
-import type { Group, Member } from "./money";
+import type { ExpensePayload, Group, Member } from "./money";
 
 const SPLITWISE_API = "https://secure.splitwise.com/api/v3.0";
 const HTTP_TIMEOUT_MS = 20_000;
 
 export interface SplitwiseClient {
   getGroup(): Promise<Group>;
+  /** Creates one Expense; succeeds only with no errors object and a returned Expense ID. */
+  createExpense(payload: ExpensePayload): Promise<number>;
 }
 
 export type Splitwise = { client: SplitwiseClient; demoUserId: number };
@@ -31,7 +33,18 @@ export const FAKE_GROUP: Group = {
  */
 export function splitwiseFromEnv(env: NodeJS.ProcessEnv = process.env): Splitwise {
   const mode = env.SPLITWISE_CLIENT?.trim();
-  if (mode === "fake") return { client: { getGroup: async () => structuredClone(FAKE_GROUP) }, demoUserId: FAKE_DEMO_USER_ID };
+  if (mode === "fake") {
+    let nextId = 9001;
+    return {
+      client: {
+        getGroup: async () => structuredClone(FAKE_GROUP),
+        async createExpense() {
+          return nextId++;
+        },
+      },
+      demoUserId: FAKE_DEMO_USER_ID,
+    };
+  }
   if (mode !== "http") throw new SplitwiseError('SPLITWISE_CLIENT must be "http" or "fake".');
 
   const names = ["SPLITWISE_API_KEY", "SPLITWISE_GROUP_ID", "DEMO_USER_SPLITWISE_ID"] as const;
@@ -44,11 +57,13 @@ export function splitwiseFromEnv(env: NodeJS.ProcessEnv = process.env): Splitwis
   return { client, demoUserId: Number(env.DEMO_USER_SPLITWISE_ID) };
 }
 
-function httpSplitwise(apiKey: string, groupId: number): SplitwiseClient {
+/** Real Splitwise HTTP client. `fetchImpl` is for tests; production uses global fetch. */
+export function httpSplitwise(apiKey: string, groupId: number, fetchImpl: typeof fetch = fetch): SplitwiseClient {
+  const headers = { Authorization: `Bearer ${apiKey}` };
   return {
     async getGroup() {
-      const response = await fetch(`${SPLITWISE_API}/get_group/${groupId}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
+      const response = await fetchImpl(`${SPLITWISE_API}/get_group/${groupId}`, {
+        headers,
         signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
       });
       const body = (await response.json().catch(() => ({}))) as Record<string, any>;
@@ -70,7 +85,38 @@ function httpSplitwise(apiKey: string, groupId: number): SplitwiseClient {
         ),
       };
     },
+    async createExpense(payload) {
+      const response = await fetchImpl(`${SPLITWISE_API}/create_expense`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      });
+      const body = (await response.json().catch(() => ({}))) as Record<string, any>;
+      // Splitwise can report application errors with HTTP 200.
+      if (hasErrors(body.errors) || body.error) {
+        throw new SplitwiseError(`create_expense rejected: ${errorText(body.errors || body.error)}`);
+      }
+      const expenses = body.expenses;
+      const expenseId = Array.isArray(expenses) && expenses[0] ? expenses[0].id : null;
+      if (!response.ok || typeof expenseId !== "number") {
+        throw new SplitwiseError(`create_expense returned no Expense ID (HTTP ${response.status})`);
+      }
+      return expenseId;
+    },
   };
+}
+
+function errorText(errors: unknown): string {
+  if (typeof errors === "string") return errors;
+  if (Array.isArray(errors)) return errors.map(String).join("; ");
+  if (errors && typeof errors === "object") {
+    return Object.values(errors as Record<string, unknown>)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .map(String)
+      .join("; ");
+  }
+  return "unknown error";
 }
 
 function hasErrors(errors: unknown): boolean {
