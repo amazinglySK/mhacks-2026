@@ -1,7 +1,5 @@
 """Reasoning Agent behaviour, independent of the uAgents runtime so it can be tested locally."""
 
-from __future__ import annotations
-
 import os
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol
@@ -150,8 +148,10 @@ def respond_to_chat(
 
     try:
         group = splitwise.get_group(settings.splitwise_group_id)
-    except (SplitwiseError, requests.RequestException):
-        return "I couldn't read the Splitwise group just now. Check the Splitwise secrets and try again."
+    except SplitwiseError as error:
+        return f"I couldn't read the Splitwise group just now ({error}). Check the Splitwise secrets and try again."
+    except requests.RequestException as error:
+        return f"I couldn't reach Splitwise just now ({type(error).__name__}). Try again in a moment."
 
     members = group.get("members") or []
     if not any(member.get("id") == settings.demo_user_splitwise_id for member in members):

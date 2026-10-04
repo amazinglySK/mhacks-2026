@@ -113,6 +113,14 @@ def test_splitwise_failure_is_reported_without_calling_asi_one():
     assert asi.calls == []
 
 
+def test_splitwise_failure_reply_names_the_http_status():
+    splitwise = FakeSplitwise(error=SplitwiseError("get_group failed (HTTP 401)"))
+
+    reply = respond_to_chat(**dm("@agent preflight"), settings=settings(), splitwise=splitwise, asi=FakeAsi())
+
+    assert "HTTP 401" in reply
+
+
 def test_demo_user_missing_from_group_is_reported():
     group = {**GROUP, "members": GROUP["members"][1:]}
     asi = FakeAsi()

@@ -27,4 +27,4 @@ Fill in after each run. Do not paste secrets, phone numbers, DM IDs, or Splitwis
 
 | Date | Photon send/receive | Agentverse round trip | Splitwise group read | End-to-end `@agent` reply | Other-DM rejected | Notes |
 |---|---|---|---|---|---|---|
-| | not yet run | not yet run | not yet run | not yet run | not yet run | |
+| 2026-10-04 | passed | passed | passed (group "MHacks Weekend") | passed | passed | Without `@agent`, a DM message is forwarded and the agent logs `chat_ignored`. A non-text event right after a reply is rejected as `not_text`. |
