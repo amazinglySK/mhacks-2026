@@ -4,7 +4,7 @@ import json
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Mapping, Protocol
 
@@ -21,9 +21,13 @@ HTTP_TIMEOUT_SECONDS = 20
 
 SESSION_KEY = "listening_session"
 COMMITTED_KEY = "committed_drafts"
+HANDLED_COMMITS_KEY = "handled_commit_message_ids"
+HANDLED_COMMITS_LIMIT = 50
 CURRENCY_CODE = "USD"
 CENT = Decimal("0.01")
 TRANSCRIPT_LIMIT = 30
+# Splitwise timestamps come from its clock, not Agentverse's.
+ATTEMPT_CLOCK_SKEW = timedelta(minutes=5)
 SELF_REFERENCES = {"me", "i", "myself"}
 
 REQUIRED_SECRETS = (
@@ -114,6 +118,21 @@ class SplitwiseClient:
             raise SplitwiseError("get_group returned no group")
         return group
 
+    def list_expenses(self, group_id: int, updated_after: str) -> list[dict]:
+        response = self._http.get(
+            f"{SPLITWISE_API}/get_expenses",
+            headers=self._headers,
+            params={"group_id": group_id, "updated_after": updated_after, "limit": 100},
+            timeout=HTTP_TIMEOUT_SECONDS,
+        )
+        body = _json(response)
+        if response.status_code != 200 or body.get("errors") or body.get("error"):
+            raise SplitwiseError(f"get_expenses failed (HTTP {response.status_code})")
+        expenses = body.get("expenses")
+        if not isinstance(expenses, list):
+            raise SplitwiseError("get_expenses returned no expenses")
+        return [expense for expense in expenses if isinstance(expense, dict)]
+
     def create_expense(self, payload: dict) -> int:
         """Creates one Expense; succeeds only when Splitwise returns no errors and an Expense ID."""
         response = self._http.post(
@@ -182,6 +201,7 @@ class Asi1Client:
 
 class SplitwiseService(Protocol):
     def get_group(self, group_id: int) -> dict: ...
+    def list_expenses(self, group_id: int, updated_after: str) -> list[dict]: ...
     def create_expense(self, payload: dict) -> int: ...
 
 
@@ -229,7 +249,7 @@ def respond_to_chat(
             return _connection_reply(text, settings, splitwise, asi) if MENTION in command else None
         if session["status"] == "stopped":
             if command == COMMIT_COMMAND:
-                return _commit(session, settings, splitwise, storage)
+                return _commit(session, metadata.get("message_id", ""), settings, splitwise, storage)
             return AWAITING_COMMIT_REPLY if MENTION in command else None
         return _interpret(text, metadata, session, settings, splitwise, asi, storage)
     except _Reply as reply:
@@ -265,8 +285,17 @@ def _stop(session: dict | None, settings: Settings, splitwise: SplitwiseService,
     return "\n".join(lines)
 
 
-def _commit(session: dict, settings: Settings, splitwise: SplitwiseService, storage: Storage) -> str:
+def _commit(
+    session: dict, message_id: str, settings: Settings, splitwise: SplitwiseService, storage: Storage
+) -> str | None:
+    """Best-effort Commit of every uncommitted Draft; a redelivered confirmation message is ignored."""
+    handled = storage.get(HANDLED_COMMITS_KEY) or []
+    if message_id and message_id in handled:
+        return None
     group = _load_group(settings, splitwise)
+    if message_id:
+        storage.set(HANDLED_COMMITS_KEY, [*handled, message_id][-HANDLED_COMMITS_LIMIT:])
+
     committed, failed = [], []
     for draft in _uncommitted(session):
         problems = validate_draft(draft)
@@ -274,13 +303,20 @@ def _commit(session: dict, settings: Settings, splitwise: SplitwiseService, stor
             failed.append((draft, "; ".join(problems)))
             continue
         try:
-            expense_id = splitwise.create_expense(draft_to_create_expense_payload(draft, settings.splitwise_group_id))
-        except SplitwiseError as error:
-            failed.append((draft, str(error)))
+            expense_id = _find_saved_attempt(draft, session, settings, splitwise, storage)
+        except (SplitwiseError, requests.RequestException) as error:
+            reason = _failure_reason(error)
+            failed.append((draft, f"I couldn't check whether an earlier try reached Splitwise ({reason}), so I didn't resend it"))
             continue
-        except requests.RequestException as error:
-            failed.append((draft, f"couldn't reach Splitwise: {type(error).__name__}"))
-            continue
+        if expense_id is None:
+            # Saved before sending: the create may land even if this handler never hears back.
+            draft.setdefault("first_attempted_at", _now())
+            storage.set(SESSION_KEY, session)
+            try:
+                expense_id = splitwise.create_expense(draft_to_create_expense_payload(draft, settings.splitwise_group_id))
+            except (SplitwiseError, requests.RequestException) as error:
+                failed.append((draft, _failure_reason(error)))
+                continue
         now = _now()
         draft.update(status="committed", splitwise_expense_id=expense_id, committed_at=now, updated_at=now)
         storage.set(SESSION_KEY, session)
@@ -299,6 +335,38 @@ def _commit(session: dict, settings: Settings, splitwise: SplitwiseService, stor
     if failed:
         lines.append("Those Drafts are still uncommitted. Reply commit to retry.")
     return "\n".join(lines)
+
+
+def _find_saved_attempt(
+    draft: dict, session: dict, settings: Settings, splitwise: SplitwiseService, storage: Storage
+) -> int | None:
+    """The Expense an earlier unconfirmed create may have saved anyway (e.g. a timeout after Splitwise wrote it)."""
+    if not draft.get("first_attempted_at"):
+        return None
+    since = datetime.fromisoformat(draft["first_attempted_at"]) - ATTEMPT_CLOCK_SKEW
+    known = {d.get("splitwise_expense_id") for d in [*(storage.get(COMMITTED_KEY) or []), *session["drafts"]]}
+    wanted = (draft["description"], _decimal(draft["amount"]), _share_key(draft["shares"]))
+    for expense in splitwise.list_expenses(settings.splitwise_group_id, since.isoformat()):
+        if expense.get("id") in known or expense.get("deleted_at"):
+            continue
+        found = (
+            str(expense.get("description") or "").strip(),
+            _decimal(expense.get("cost")),
+            _share_key(expense.get("users") or []),
+        )
+        if found == wanted and isinstance(expense.get("id"), int):
+            return expense["id"]
+    return None
+
+
+def _share_key(shares: list[dict]) -> frozenset:
+    return frozenset((s.get("user_id"), _decimal(s.get("paid_share")), _decimal(s.get("owed_share"))) for s in shares)
+
+
+def _failure_reason(error: Exception) -> str:
+    if isinstance(error, requests.RequestException):
+        return f"couldn't reach Splitwise: {type(error).__name__}"
+    return str(error)
 
 
 def _interpret(
@@ -539,6 +607,13 @@ def _money(value: Any) -> Decimal | None:
     if not amount.is_finite() or amount <= 0:
         return None
     return amount.quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def _decimal(value: Any) -> Decimal | None:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def _cents(amount: Decimal) -> str:

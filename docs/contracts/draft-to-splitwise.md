@@ -45,15 +45,19 @@ interface Draft {
   // Post-commit reference
   splitwise_expense_id?: number;  // Set after successful commit
   committed_at?: string;  // ISO 8601
+
+  // Saved just before the first create is sent; a retry first looks for an Expense that attempt saved anyway
+  first_attempted_at?: string;  // ISO 8601
 }
 ```
 
 ### Storage Layout
 
-The judging deployment has one configured DM, so Agent Storage holds two keys:
+The judging deployment has one configured DM, so Agent Storage holds three keys:
 
 - `listening_session`: `{status: 'active' | 'stopped', transcript, drafts: Draft[]}`. One value, saved whole after every change. The transcript is temporary context for the active session and is cleared on stop.
 - `committed_drafts`: `Draft[]` of committed Drafts with their `splitwise_expense_id`. A reset never deletes this key.
+- `handled_commit_message_ids`: the last 50 iMessage message IDs already acted on as a `commit`, kept across sessions so a redelivered envelope never retries or confirms a batch on its own. A reset should keep this key.
 
 ---
 
@@ -408,6 +412,8 @@ async def commit_drafts_and_notify(session: ListeningSession) -> str:
 - **Natural language:** Conversational tone, not robotic status codes
 - **Deferred verification:** Tell user to check Splitwise later, don't show all IDs inline
 - **Retry prompt:** On failure, ask if user wants to retry
+- **User-requested retry only:** Each new `commit` message retries the remaining uncommitted Drafts; a redelivered `commit` with an already-handled message ID does nothing. There are no automatic retries.
+- **No duplicate after an uncertain failure:** A create that fails (timeout, connection error, Splitwise error, or the handler dying mid-request) may still have been saved. `first_attempted_at` is stored before the create is sent. Before resending such a Draft, the agent reads `GET /get_expenses?group_id=…&updated_after=<first attempt − 5 min>` and adopts a non-deleted Expense whose description, cost, and paid/owed shares match exactly and whose ID is not already mapped to another committed Draft. If that read fails, the Draft is reported and not resent.
 
 ---
 

@@ -74,6 +74,31 @@ def test_splitwise_create_expense_without_an_id_raises(response):
         SplitwiseClient("sw-key", http=FakeHttp(response)).create_expense({})
 
 
+def test_splitwise_list_expenses_queries_the_group_since_a_time():
+    http = FakeHttp(FakeResponse(200, {"expenses": [{"id": 51023, "description": "Pizza"}]}))
+
+    expenses = SplitwiseClient("sw-key", http=http).list_expenses(7, "2026-10-04T04:00:00+00:00")
+
+    assert expenses == [{"id": 51023, "description": "Pizza"}]
+    method, url, kwargs = http.requests[0]
+    assert (method, url) == ("GET", "https://secure.splitwise.com/api/v3.0/get_expenses")
+    assert kwargs["params"] == {"group_id": 7, "updated_after": "2026-10-04T04:00:00+00:00", "limit": 100}
+    assert kwargs["headers"]["Authorization"] == "Bearer sw-key"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        FakeResponse(200, {"errors": {"base": ["Invalid API request: you do not have permission"]}}),
+        FakeResponse(401, {"error": "Invalid API Request: you are not logged in"}),
+        FakeResponse(200, {"expenses": None}),
+    ],
+)
+def test_splitwise_list_expenses_errors_raise(response):
+    with pytest.raises(SplitwiseError):
+        SplitwiseClient("sw-key", http=FakeHttp(response)).list_expenses(7, "2026-10-04T04:00:00+00:00")
+
+
 def test_splitwise_create_expense_error_names_splitwise_reason():
     response = FakeResponse(200, {"expenses": [], "errors": {"base": ["Shares do not add up"]}})
 
