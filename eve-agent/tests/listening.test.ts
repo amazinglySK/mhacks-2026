@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { batchFingerprint, buildDraft, DraftError } from "../agent/lib/money.ts";
+import { applyDraftChanges, batchFingerprint, buildDraft, DraftError } from "../agent/lib/money.ts";
 import type { Draft, Group } from "../agent/lib/money.ts";
-import { addDraft, NO_SESSION, startListening, stopListening, summarizeSession } from "../agent/lib/listening.ts";
+import { addDraft, modifyDraft, NO_SESSION, startListening, stopListening, summarizeSession } from "../agent/lib/listening.ts";
 import type { ListeningSession } from "../agent/lib/listening.ts";
 import type { SplitwiseClient } from "../agent/lib/splitwise.ts";
 
@@ -68,6 +68,41 @@ test("Drafts are recorded only in an active session", async () => {
   assert.throws(() => addDraft(stopped, pizza("40", "d2")), (error) => error instanceof DraftError && /stopped/i.test(error.message));
 
   assert.deepEqual(addDraft(active(), pizza()).drafts, [pizza()]);
+});
+
+test("a Modification updates the existing Draft in place", () => {
+  const original = pizza();
+  const other = pizza("12", "d2");
+  const next = applyDraftChanges(original, { amount: "36" }, GROUP, 100, {
+    now: "2026-10-04T06:05:00.000Z",
+    source: { id: "m2", sender: "+15550100" },
+  });
+
+  const session = modifyDraft(active(original, other), next);
+
+  assert.equal(session.drafts.length, 2);
+  assert.deepEqual(session.drafts[0], next);
+  assert.deepEqual(session.drafts[1], other);
+});
+
+test("a Modification is rejected when the session is stopped", async () => {
+  const original = pizza();
+  const { session: stopped } = await stopListening(active(original), countingClient().client);
+  const next = { ...original, amount: "36.00" };
+
+  assert.throws(() => modifyDraft(stopped, next), (error) => error instanceof DraftError && /stopped/i.test(error.message));
+  assert.deepEqual(stopped.drafts, [original]);
+});
+
+test("a Modification of an unknown Draft leaves the batch unchanged", () => {
+  const original = pizza();
+  const session = active(original);
+
+  assert.throws(
+    () => modifyDraft(session, { ...original, id: "missing" }),
+    (error) => error instanceof DraftError && /missing/.test(error.message),
+  );
+  assert.deepEqual(session.drafts, [original]);
 });
 
 test("the summary lists every Draft and the mapped group", async () => {

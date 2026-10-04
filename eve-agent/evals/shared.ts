@@ -5,11 +5,19 @@ export const START = "@agent start listening";
 export const STOP = "@agent stop listening";
 export const REVIEW = "what do you got @agent?";
 export const PIZZA = "I paid $30 for pizza with Alex and Maya, split equally.";
+export const CHANGE_PIZZA = "Actually make the pizza $36.";
+export const GAS = "I paid $20 for gas with Alex, split equally.";
 
 export const PIZZA_SHARES = [
   { user_id: 100, paid_share: "30.00", owed_share: "10.00" },
   { user_id: 101, paid_share: "0.00", owed_share: "10.00" },
   { user_id: 102, paid_share: "0.00", owed_share: "10.00" },
+];
+
+export const PIZZA_36_SHARES = [
+  { user_id: 100, paid_share: "36.00", owed_share: "12.00" },
+  { user_id: 101, paid_share: "0.00", owed_share: "12.00" },
+  { user_id: 102, paid_share: "0.00", owed_share: "12.00" },
 ];
 
 /** A new conversation with an active Listening Session. */

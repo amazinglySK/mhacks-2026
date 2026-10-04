@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { batchFingerprint, buildDraft, describeDraft, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
+import { applyDraftChanges, batchFingerprint, buildDraft, describeDraft, DraftError, equalShares, parseAmount, validateDraft } from "../agent/lib/money.ts";
 import type { ExpenseInput, Group } from "../agent/lib/money.ts";
 
 const DEMO_USER = 100;
@@ -134,4 +134,52 @@ test("validation catches unbalanced and negative shares", () => {
   shares[1] = { ...shares[1], owed_share: "-10.00" };
 
   assert.deepEqual(validateDraft({ amount: "30.00", shares }), ["owed shares don't add up to the cost", "a share is negative"]);
+});
+
+test("changing the pizza amount recomputes three $12 owed shares and keeps the Draft id", () => {
+  const pizza = draft({});
+  const changed = applyDraftChanges(pizza, { amount: "36" }, GROUP, DEMO_USER, {
+    now: "2026-10-04T06:05:00.000Z",
+    source: { id: "m2", sender: "+15550100" },
+  });
+
+  assert.equal(changed.id, pizza.id);
+  assert.equal(changed.status, "draft");
+  assert.equal(changed.description, "Pizza");
+  assert.equal(changed.amount, "36.00");
+  assert.deepEqual(changed.shares, equalShares(3600, 100, [100, 101, 102]));
+  assert.equal(changed.created_at, pizza.created_at);
+  assert.equal(changed.updated_at, "2026-10-04T06:05:00.000Z");
+  assert.deepEqual(changed.source_messages, [
+    { id: "m1", sender: "+15550100" },
+    { id: "m2", sender: "+15550100" },
+  ]);
+  assert.equal(
+    describeDraft(changed, GROUP),
+    "Pizza $36.00, paid by Demo User, split equally: Demo User $12.00, Alex $12.00, Maya Lee $12.00",
+  );
+});
+
+test("a Modification that changes Participants resolves names and recomputes shares", () => {
+  const pizza = draft({});
+  const changed = applyDraftChanges(pizza, { participants: ["Alex", "Sam Park"] }, GROUP, DEMO_USER, {
+    now: "2026-10-04T06:05:00.000Z",
+    source: { id: "m2", sender: "+15550100" },
+  });
+
+  assert.equal(changed.id, pizza.id);
+  assert.deepEqual(changed.shares, equalShares(3000, 100, [100, 101, 103]));
+});
+
+test("a Modification with an unknown Participant blocks the change", () => {
+  const pizza = draft({});
+
+  assert.throws(
+    () =>
+      applyDraftChanges(pizza, { participants: ["Zed"] }, GROUP, DEMO_USER, {
+        now: "2026-10-04T06:05:00.000Z",
+        source: { id: "m2", sender: "+15550100" },
+      }),
+    (error) => error instanceof DraftError && /Zed is not in MHacks Weekend/.test(error.message),
+  );
 });

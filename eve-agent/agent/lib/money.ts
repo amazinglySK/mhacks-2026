@@ -33,6 +33,14 @@ export type ExpenseInput = {
   participants: string[];
 };
 
+/** Fields a Modification may change; omitted fields keep the Draft's current values. */
+export type DraftChanges = {
+  description?: string;
+  amount?: string;
+  payer?: string;
+  participants?: string[];
+};
+
 /** A reason a Draft can't be recorded, phrased for the model to relay or act on. */
 export class DraftError extends Error {}
 
@@ -129,6 +137,35 @@ export function buildDraft(
     throw new DraftError(`${description} $${draft.amount} can't be split that way: ${problems.join("; ")}.`);
   }
   return draft;
+}
+
+/** Updates a Draft in place: same id, recomputed shares, source message appended. */
+export function applyDraftChanges(
+  draft: Draft,
+  changes: DraftChanges,
+  group: Group,
+  demoUserId: number,
+  meta: { now: string; source: { id: string; sender: string } },
+): Draft {
+  const names = new Map(group.members.map((m) => [m.id, fullName(m)]));
+  const nameOf = (id: number) => names.get(id) ?? `user ${id}`;
+  const payer = draft.shares.find((s) => (parseAmount(s.paid_share) ?? 0) > 0);
+  const rebuilt = buildDraft(
+    {
+      description: changes.description ?? draft.description,
+      amount: changes.amount ?? draft.amount,
+      payer: changes.payer ?? (payer ? nameOf(payer.user_id) : "me"),
+      participants: changes.participants ?? draft.shares.filter((s) => s.user_id !== payer?.user_id).map((s) => nameOf(s.user_id)),
+    },
+    group,
+    demoUserId,
+    { id: draft.id, now: meta.now, source: meta.source },
+  );
+  return {
+    ...rebuilt,
+    created_at: draft.created_at,
+    source_messages: [...draft.source_messages, meta.source],
+  };
 }
 
 /** Identifies exactly what Commit would send for these Drafts, so a confirmed batch can be matched to the one shown. */

@@ -38,6 +38,21 @@ export function addDraft(session: ListeningSession, draft: Draft): ListeningSess
   return { ...session, drafts: [...session.drafts, draft] };
 }
 
+/** Replaces a Draft in place by id, or throws a DraftError when the session isn't active or the id is unknown. */
+export function modifyDraft(session: ListeningSession, draft: Draft): ListeningSession {
+  assertActive(session);
+  const index = session.drafts.findIndex((current) => current.id === draft.id);
+  if (index === -1) {
+    const known = session.drafts.map((current) => `${current.id} (${current.description})`).join(", ");
+    throw new DraftError(
+      `No Draft ${draft.id} in this session, so nothing was changed. Current Drafts: ${known || "none"}. Ask which Draft they meant.`,
+    );
+  }
+  const drafts = session.drafts.slice();
+  drafts[index] = draft;
+  return { ...session, drafts };
+}
+
 /** Throws a DraftError unless the session is active, before anything is read or built. */
 export function assertActive(session: ListeningSession): void {
   if (session.status === "stopped") {
